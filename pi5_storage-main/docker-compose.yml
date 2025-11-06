@@ -1,0 +1,45 @@
+#services:
+#  pi5-storage:
+#    build: .
+#    container_name: pi5-storage
+#    ports:
+#      - "8000:8000"
+#    environment:
+#      - IMAGES_ROOT=/data/images
+#    volumes:
+#      - ./storage_data/images:/data/images
+
+services:
+  # --- FastAPI Upload + Label Studio SDK ---
+  pi5-storage:
+    build: .
+    container_name: pi5-storage
+    depends_on:
+      - label-studio
+    ports:
+      - "8000:8000"
+    environment:
+      - IMAGES_ROOT=/data/images
+      - LABEL_STUDIO_URL=http://label-studio:8080
+      - LABEL_STUDIO_API_KEY= #todo: add api key
+      - LABEL_STUDIO_PROJECT_ID=1
+    volumes:
+      - ./storage_data/images:/data/images
+      - ./app:/app  # optional für Live-Code
+    restart: unless-stopped
+
+  # --- Label Studio selbst ---
+  label-studio:
+    image: heartexlabs/label-studio:latest
+    container_name: label-studio
+    ports:
+      - "8080:8080"
+    environment:
+      - LABEL_STUDIO_LOCAL_FILES_SERVING_ENABLED=true
+      - LABEL_STUDIO_LOCAL_FILES_DOCUMENT_ROOT=/labelstudio/data
+      - LABEL_STUDIO_DISABLE_SIGNUP_WITHOUT_LINK=true
+#todo: add credentials maybe i dont know what the best way to login is
+    volumes:
+      - ./storage_data/labelstudio:/labelstudio/data
+      - ./storage_data/images:/labelstudio/data/images
+    restart: unless-stopped

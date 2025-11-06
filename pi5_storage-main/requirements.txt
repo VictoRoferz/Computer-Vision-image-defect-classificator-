@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+python-multipart
+label-studio-sdk
+watchdog
+requests
