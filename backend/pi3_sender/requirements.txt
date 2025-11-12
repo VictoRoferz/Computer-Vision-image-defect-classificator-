@@ -1,0 +1,7 @@
+# HTTP client
+requests==2.31.0
+
+# OpenCV for camera capture (optional, will fall back to sample images if not available)
+opencv-python==4.9.0.80; platform_machine != "armv7l"
+# For Raspberry Pi 3 (ARM), use lighter version:
+# opencv-python-headless==4.9.0.80; platform_machine == "armv7l"

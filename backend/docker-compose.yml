@@ -1,0 +1,164 @@
+version: '3.8'
+
+# PCB Labeling Workflow System
+# Simulates Raspberry Pi 3 (sender) and Raspberry Pi 5 (receiver + Label Studio)
+# on Mac/local development environment
+
+services:
+  # =============================================================================
+  # Label Studio - Annotation Platform
+  # =============================================================================
+  label-studio:
+    image: heartexlabs/label-studio:latest
+    container_name: label-studio
+    ports:
+      - "8080:8080"  # Access UI at http://localhost:8080
+    environment:
+      # Enable local file serving (required for local storage)
+      - LABEL_STUDIO_LOCAL_FILES_SERVING_ENABLED=true
+      - LABEL_STUDIO_LOCAL_FILES_DOCUMENT_ROOT=/labelstudio/data
+      # Disable public signup (security)
+      - LABEL_STUDIO_DISABLE_SIGNUP_WITHOUT_LINK=true
+      # Optional: Set initial credentials
+      # - LABEL_STUDIO_USERNAME=admin
+      # - LABEL_STUDIO_PASSWORD=changeme
+    volumes:
+      # Persistent storage for Label Studio data
+      - ./data/labelstudio:/labelstudio/data
+      # Mount images directory for local file access
+      - ./data/images:/labelstudio/data/images
+    networks:
+      - pcb-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # =============================================================================
+  # PI5 Receiver - Storage + Label Studio Integration
+  # =============================================================================
+  pi5-receiver:
+    build:
+      context: ./pi5_receiver
+      dockerfile: Dockerfile
+    container_name: pi5-receiver
+    depends_on:
+      label-studio:
+        condition: service_healthy
+    ports:
+      - "8000:8000"  # API endpoint at http://localhost:8000
+    environment:
+      # Server configuration
+      - HOST=0.0.0.0
+      - PORT=8000
+
+      # Storage configuration
+      - DATA_ROOT=/data
+
+      # Label Studio configuration
+      - LABEL_STUDIO_URL=http://label-studio:8080
+      - LABEL_STUDIO_API_KEY=${LABEL_STUDIO_API_KEY:-}
+      - LABEL_STUDIO_PROJECT_ID=${LABEL_STUDIO_PROJECT_ID:-}
+      - LABEL_STUDIO_PROJECT_NAME=PCB Defect Classification
+
+      # Watcher configuration
+      - WATCHER_ENABLED=true
+      - WATCHER_POLL_INTERVAL=5
+
+      # Logging
+      - LOG_LEVEL=INFO
+    volumes:
+      # Persistent storage for images and database
+      - ./data:/data
+      # Optional: Mount code for development (hot reload)
+      # - ./pi5_receiver:/app
+    networks:
+      - pcb-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/api/v1/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # =============================================================================
+  # PI3 Sender - Image Source and Forwarder
+  # =============================================================================
+  pi3-sender:
+    build:
+      context: ./pi3_sender
+      dockerfile: Dockerfile
+    container_name: pi3-sender
+    depends_on:
+      pi5-receiver:
+        condition: service_healthy
+    environment:
+      # Camera configuration (set to false for simulation)
+      - USE_CAMERA=false
+      - CAMERA_INDEX=0
+
+      # Watch directory configuration
+      - WATCH_DIR=/data/watch
+      - WATCH_INTERVAL=2
+
+      # Upload configuration
+      - UPLOAD_URL=http://pi5-receiver:8000/api/v1/upload
+      - UPLOAD_TIMEOUT=30
+      - RETRY_ATTEMPTS=3
+      - RETRY_DELAY=2
+
+      # Logging
+      - LOG_LEVEL=INFO
+    volumes:
+      # Watch directory for incoming images
+      - ./data/watch:/data/watch
+      # Captured images output
+      - ./data/captured:/data/captured
+      # Sample images for simulation
+      - ./sample_images:/app/sample_images
+      # Optional: Mount code for development
+      # - ./pi3_sender:/app
+    networks:
+      - pcb-network
+    restart: unless-stopped
+
+  # =============================================================================
+  # Label Studio Init (One-time setup)
+  # =============================================================================
+  label-studio-init:
+    build:
+      context: ./label_studio_init
+      dockerfile: Dockerfile
+    container_name: label-studio-init
+    depends_on:
+      label-studio:
+        condition: service_healthy
+    environment:
+      - LABEL_STUDIO_URL=http://label-studio:8080
+      - LABEL_STUDIO_API_KEY=${LABEL_STUDIO_API_KEY:-}
+      - LABEL_STUDIO_PROJECT_NAME=PCB Defect Classification
+      - LABEL_STUDIO_STORAGE_PATH=/labelstudio/data/images/unlabeled
+    networks:
+      - pcb-network
+    profiles:
+      - init  # Only run when explicitly requested with --profile init
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  pcb-network:
+    driver: bridge
+    name: pcb-labeling-network
+
+# =============================================================================
+# Volumes (optional, for explicit volume management)
+# =============================================================================
+# volumes:
+#   labelstudio-data:
+#   images-data:
+#   database-data:

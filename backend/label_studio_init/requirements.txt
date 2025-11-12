@@ -1,0 +1,5 @@
+# Label Studio SDK
+label-studio-sdk==1.0.1
+
+# Requests for health checks
+requests==2.31.0
