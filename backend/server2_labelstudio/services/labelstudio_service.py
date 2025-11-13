@@ -235,10 +235,10 @@ class LabelStudioService:
 
         try:
             # Construct image URL (accessible from Label Studio container)
-            # Label Studio needs to access the image via HTTP or local path
-            # We'll use the local path approach since images are mounted
+            # Label Studio local file serving format: /data/local-files/?d=<relative_path>
+            # Images are mounted at /labelstudio/data in Label Studio container
             relative_path = str(image_path.relative_to(settings.data_root))
-            image_url = f"/labelstudio/data/{relative_path}"
+            image_url = f"/data/local-files/?d={relative_path}"
 
             # Prepare task data
             task_data = {
