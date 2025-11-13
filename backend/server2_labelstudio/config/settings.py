@@ -4,6 +4,7 @@ Uses Pydantic Settings for type-safe environment variable handling
 """
 from pathlib import Path
 from typing import Optional
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -34,6 +35,14 @@ class Settings(BaseSettings):
     labelstudio_api_key: str = ""  # Must be set via environment
     labelstudio_project_id: Optional[int] = None  # Auto-created if None
     labelstudio_project_name: str = "PCB Defect Classification"
+
+    @field_validator('labelstudio_project_id', mode='before')
+    @classmethod
+    def empty_str_to_none(cls, v):
+        """Convert empty strings to None for optional integer fields"""
+        if v == '' or v is None:
+            return None
+        return v
 
     # Label Studio project configuration
     labelstudio_auto_create_project: bool = True
