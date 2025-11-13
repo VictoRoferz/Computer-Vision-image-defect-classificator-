@@ -62,13 +62,19 @@ class LabelStudioService:
 
         logger.info(f"LabelStudioService initialized: url={self.ls_url}")
 
-    def initialize(self) -> None:
+    def initialize(self, max_retries: int = 10, retry_delay: float = 3.0) -> None:
         """
-        Initialize Label Studio client and project.
+        Initialize Label Studio client and project with retry logic.
         Creates project if it doesn't exist.
 
+        Retries connection if Label Studio is not ready yet (e.g., still starting up).
+
+        Args:
+            max_retries: Maximum number of connection attempts (default: 10)
+            retry_delay: Initial delay between retries in seconds (default: 3.0)
+
         Raises:
-            RuntimeError: If initialization fails
+            RuntimeError: If initialization fails after all retries
         """
         if not self.api_key:
             logger.warning(
@@ -77,29 +83,58 @@ class LabelStudioService:
             )
             raise RuntimeError("Label Studio API key not configured")
 
-        try:
-            # Create client
-            logger.info(f"Connecting to Label Studio at {self.ls_url}")
-            self.client = Client(url=self.ls_url, api_key=self.api_key)
+        last_error = None
 
-            # Get or create project
-            if self.project_id:
-                self.project = self._get_project()
-            else:
-                self.project = self._create_or_get_project()
+        # Retry loop - Label Studio might still be starting up
+        for attempt in range(1, max_retries + 1):
+            try:
+                # Create client
+                logger.info(
+                    f"Connecting to Label Studio at {self.ls_url} "
+                    f"(attempt {attempt}/{max_retries})"
+                )
+                self.client = Client(url=self.ls_url, api_key=self.api_key)
 
-            if self.project:
-                logger.info(f"Label Studio project ready: ID={self.project.id}")
+                # Get or create project
+                if self.project_id:
+                    self.project = self._get_project()
+                else:
+                    self.project = self._create_or_get_project()
 
-                # Configure webhook if enabled
-                if settings.labelstudio_enable_webhooks:
-                    self._setup_webhook()
-            else:
-                raise RuntimeError("Failed to initialize Label Studio project")
+                if self.project:
+                    logger.info(
+                        f"✓ Label Studio connected successfully! "
+                        f"Project ready: ID={self.project.id}"
+                    )
 
-        except Exception as e:
-            logger.error(f"Label Studio initialization failed: {e}", exc_info=True)
-            raise RuntimeError(f"Label Studio initialization failed: {e}") from e
+                    # Configure webhook if enabled
+                    if settings.labelstudio_enable_webhooks:
+                        self._setup_webhook()
+
+                    return  # Success! Exit the function
+                else:
+                    raise RuntimeError("Failed to initialize Label Studio project")
+
+            except Exception as e:
+                last_error = e
+
+                if attempt < max_retries:
+                    # Calculate delay with exponential backoff
+                    delay = retry_delay * (1.5 ** (attempt - 1))
+                    logger.warning(
+                        f"Connection failed (attempt {attempt}/{max_retries}): {str(e)[:100]}"
+                    )
+                    logger.info(f"Retrying in {delay:.1f} seconds...")
+                    time.sleep(delay)
+                else:
+                    # Final attempt failed
+                    logger.error(
+                        f"Label Studio initialization failed after {max_retries} attempts: {e}",
+                        exc_info=True
+                    )
+                    raise RuntimeError(
+                        f"Label Studio initialization failed after {max_retries} attempts: {e}"
+                    ) from e
 
     def _get_project(self) -> Optional[Project]:
         """
