@@ -7,7 +7,7 @@ from fastapi import APIRouter, UploadFile, File, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pathlib import Path
 from typing import Optional, List, Dict, Any
-from ..models.schemas import (
+from models.schemas import (
     UploadResponse,
     ImageInfo,
     LabeledImageInfo,
@@ -15,10 +15,10 @@ from ..models.schemas import (
     StatusResponse,
     HealthResponse
 )
-from ..services.storage_service import storage_service
-from ..services.labelstudio_service import labelstudio_service
-from ..config.settings import settings
-from ..utils.logger import setup_logger
+from services.storage_service import storage_service
+from services.labelstudio_service import labelstudio_service
+from config.settings import settings
+from utils.logger import setup_logger
 
 logger = setup_logger(__name__, level=settings.log_level)
 

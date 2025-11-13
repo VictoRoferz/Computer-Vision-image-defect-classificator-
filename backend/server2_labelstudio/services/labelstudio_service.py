@@ -7,8 +7,8 @@ from typing import Optional, Dict, Any, List
 from pathlib import Path
 from label_studio_sdk import Client
 from label_studio_sdk.project import Project
-from ..config.settings import settings
-from ..utils.logger import setup_logger
+from config.settings import settings
+from utils.logger import setup_logger
 
 logger = setup_logger(__name__, level=settings.log_level)
 

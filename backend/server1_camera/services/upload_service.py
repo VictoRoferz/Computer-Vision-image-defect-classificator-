@@ -7,8 +7,8 @@ import time
 import requests
 from pathlib import Path
 from typing import Optional, Dict, Any
-from ..config.settings import settings
-from ..utils.logger import setup_logger
+from config.settings import settings
+from utils.logger import setup_logger
 
 logger = setup_logger(__name__, level=settings.log_level)
 

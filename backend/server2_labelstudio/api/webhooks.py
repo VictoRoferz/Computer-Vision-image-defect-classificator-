@@ -5,11 +5,11 @@ Handles callbacks from Label Studio when annotations are created/updated
 from fastapi import APIRouter, Request, HTTPException, BackgroundTasks
 from typing import Dict, Any
 from pathlib import Path
-from ..models.schemas import WebhookPayload, WebhookResponse
-from ..services.storage_service import storage_service
-from ..services.labelstudio_service import labelstudio_service
-from ..config.settings import settings
-from ..utils.logger import setup_logger
+from models.schemas import WebhookPayload, WebhookResponse
+from services.storage_service import storage_service
+from services.labelstudio_service import labelstudio_service
+from config.settings import settings
+from utils.logger import setup_logger
 
 logger = setup_logger(__name__, level=settings.log_level)
 

@@ -5,10 +5,10 @@ Provides endpoints for camera control and image capture
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
 from typing import Dict, Any
-from ..services.camera_service import camera_service
-from ..services.upload_service import upload_service
-from ..config.settings import settings
-from ..utils.logger import setup_logger
+from services.camera_service import camera_service
+from services.upload_service import upload_service
+from config.settings import settings
+from utils.logger import setup_logger
 
 logger = setup_logger(__name__, level=settings.log_level)
 

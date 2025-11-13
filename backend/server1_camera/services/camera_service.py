@@ -7,8 +7,8 @@ import cv2
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, Tuple
-from ..config.settings import settings
-from ..utils.logger import setup_logger
+from config.settings import settings
+from utils.logger import setup_logger
 
 logger = setup_logger(__name__, level=settings.log_level)
 
