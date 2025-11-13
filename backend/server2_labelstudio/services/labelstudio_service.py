@@ -257,11 +257,17 @@ class LabelStudioService:
             logger.info(f"Creating task for image: {image_path.name}")
             logger.debug(f"Task data: {task_data}")
 
-            # Create task
-            task = self.project.create_task(
-                data=task_data,
-                meta=task_meta
-            )
+            # Create task using REST API directly (SDK method has bugs)
+            task_payload = {
+                "data": task_data,
+                "meta": task_meta,
+                "project": self.project.id
+            }
+
+            url = f"{self.ls_url}/api/projects/{self.project.id}/tasks"
+            response = self.client.session.post(url, json=task_payload)
+            response.raise_for_status()
+            task = response.json()
 
             logger.info(f"Task created: ID={task['id']}")
 
