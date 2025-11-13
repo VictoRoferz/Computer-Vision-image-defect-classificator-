@@ -265,7 +265,8 @@ class LabelStudioService:
             }
 
             url = f"{self.ls_url}/api/projects/{self.project.id}/tasks"
-            response = self.client.session.post(url, json=task_payload)
+            headers = {"Authorization": f"Token {self.api_key}"}
+            response = self.client.session.post(url, json=task_payload, headers=headers)
             response.raise_for_status()
             task = response.json()
 
