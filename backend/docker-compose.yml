@@ -122,7 +122,7 @@ services:
     environment:
       # Label Studio configuration
       - LABEL_STUDIO_LOCAL_FILES_SERVING_ENABLED=true
-      - LABEL_STUDIO_LOCAL_FILES_DOCUMENT_ROOT=/labelstudio/data
+      - LABEL_STUDIO_LOCAL_FILES_DOCUMENT_ROOT=/data/images
       - LABEL_STUDIO_DISABLE_SIGNUP_WITHOUT_LINK=${LABELSTUDIO_DISABLE_SIGNUP:-false}
 
       # Optional: Pre-configured credentials
@@ -134,9 +134,9 @@ services:
 
     volumes:
       # Label Studio data (projects, tasks, annotations)
-      - labelstudio_data:/labelstudio/data
+      - labelstudio_data:/label-studio/data
       # Shared volume with Server 2 for image access
-      - server2_data:/labelstudio/data:ro
+      - server2_data:/data/images:ro
 
     networks:
       - pcb-network
