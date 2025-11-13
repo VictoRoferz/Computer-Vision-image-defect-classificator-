@@ -167,7 +167,9 @@ class LabelStudioService:
             for proj in projects:
                 if proj.title == self.project_name:
                     logger.info(f"Found existing project: {proj.id} - {proj.title}")
-                    return proj
+                    # Re-fetch project to get full object with all methods
+                    full_project = self.client.get_project(proj.id)
+                    return full_project
 
             # Create new project
             logger.info(f"Creating new project: {self.project_name}")
