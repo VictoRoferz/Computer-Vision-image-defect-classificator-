@@ -5,9 +5,9 @@ FastAPI application for PCB image capture and upload
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from .api.routes import router
-from .config.settings import settings
-from .utils.logger import setup_logger
+from api.routes import router
+from config.settings import settings
+from utils.logger import setup_logger
 
 logger = setup_logger(__name__, level=settings.log_level)
 
