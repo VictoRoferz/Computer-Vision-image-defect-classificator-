@@ -1,0 +1,21 @@
+# Server 1 (Camera Service - Raspberry Pi 3) Dependencies
+# Optimized for embedded systems
+
+# Web framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+
+# HTTP client for uploading to Server 2
+requests==2.31.0
+
+# Camera and image processing
+opencv-python-headless==4.9.0.80  # Headless version for lower memory footprint
+numpy==1.24.3  # Compatible with RPi
+
+# Configuration management
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# Utilities
+python-dotenv==1.0.0
