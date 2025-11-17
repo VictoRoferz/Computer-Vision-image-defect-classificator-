@@ -236,7 +236,16 @@ class LabelStudioService:
                 logger.info(f"Local storage synced for project {project_id}")
 
         except Exception as e:
-            logger.warning(f"Failed to setup local storage: {e}")
+            # Log detailed error information including response body if available
+            error_details = str(e)
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_body = e.response.text
+                    logger.warning(f"Failed to setup local storage: {e}\nResponse body: {error_body}")
+                except:
+                    logger.warning(f"Failed to setup local storage: {e}")
+            else:
+                logger.warning(f"Failed to setup local storage: {e}")
 
     def _setup_webhook(self) -> None:
         """
