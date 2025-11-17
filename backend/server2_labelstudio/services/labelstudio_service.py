@@ -214,15 +214,16 @@ class LabelStudioService:
 
             # Create new storage - path is relative to LABEL_STUDIO_LOCAL_FILES_DOCUMENT_ROOT
             storage_config = {
+                "project": project_id,  # Project ID in body (required)
                 "title": "Local Image Storage",
                 "description": "PCB images stored locally",
                 "path": ".",  # Current directory (which is /data/images)
                 "use_blob_urls": False,
-                "regex_filter": ".*\\.(jpg|jpeg|png)$",
-                "presign": False
+                "regex_filter": ".*\\.(jpg|jpeg|png)$"
+                # Note: removed "presign" - not valid for local storage
             }
 
-            url = f"{self.ls_url}/api/storages/localfiles?project={project_id}"
+            url = f"{self.ls_url}/api/storages/localfiles"
             response = self.client.session.post(url, json=storage_config, headers=headers)
             response.raise_for_status()
 
