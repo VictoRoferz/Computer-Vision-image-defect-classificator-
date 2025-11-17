@@ -169,6 +169,8 @@ class LabelStudioService:
                     logger.info(f"Found existing project: {proj.id} - {proj.title}")
                     # Re-fetch project to get full object with all methods
                     full_project = self.client.get_project(proj.id)
+                    # Ensure local storage is configured
+                    self._setup_local_storage(proj.id)
                     return full_project
 
             # Create new project
@@ -180,11 +182,45 @@ class LabelStudioService:
             )
 
             logger.info(f"Created project: {project.id}")
+            # Configure local storage for the project
+            self._setup_local_storage(project.id)
             return project
 
         except Exception as e:
             logger.error(f"Failed to create project: {e}", exc_info=True)
             raise RuntimeError(f"Project creation failed: {e}") from e
+
+    def _setup_local_storage(self, project_id: int) -> None:
+        """
+        Configure local file storage for the project.
+        This allows Label Studio to serve images from /data/images.
+        """
+        try:
+            storage_config = {
+                "title": "Local Image Storage",
+                "description": "PCB images stored locally",
+                "path": "/data/images",
+                "use_blob_urls": False,
+                "regex_filter": ".*\\.(jpg|jpeg|png)$",
+                "presign": False
+            }
+
+            url = f"{self.ls_url}/api/storages/localfiles?project={project_id}"
+            headers = {"Authorization": f"Token {self.api_key}"}
+            response = self.client.session.post(url, json=storage_config, headers=headers)
+            response.raise_for_status()
+
+            logger.info(f"Local storage configured for project {project_id}")
+
+            # Sync the storage to make files immediately available
+            storage_id = response.json().get('id')
+            if storage_id:
+                sync_url = f"{self.ls_url}/api/storages/localfiles/{storage_id}/sync"
+                self.client.session.post(sync_url, headers=headers)
+                logger.info(f"Local storage synced for project {project_id}")
+
+        except Exception as e:
+            logger.warning(f"Failed to setup local storage: {e}")
 
     def _setup_webhook(self) -> None:
         """
