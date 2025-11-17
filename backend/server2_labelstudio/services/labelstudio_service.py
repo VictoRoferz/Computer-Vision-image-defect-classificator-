@@ -196,17 +196,33 @@ class LabelStudioService:
         This allows Label Studio to serve images from /data/images.
         """
         try:
+            # First check if local storage already exists for this project
+            list_url = f"{self.ls_url}/api/storages/localfiles?project={project_id}"
+            headers = {"Authorization": f"Token {self.api_key}"}
+            response = self.client.session.get(list_url, headers=headers)
+            response.raise_for_status()
+
+            existing_storages = response.json()
+            if existing_storages:
+                # Storage already exists, just sync it
+                storage_id = existing_storages[0]['id']
+                logger.info(f"Local storage already exists for project {project_id}, syncing...")
+                sync_url = f"{self.ls_url}/api/storages/localfiles/{storage_id}/sync"
+                self.client.session.post(sync_url, headers=headers)
+                logger.info(f"Local storage synced for project {project_id}")
+                return
+
+            # Create new storage - path is relative to LABEL_STUDIO_LOCAL_FILES_DOCUMENT_ROOT
             storage_config = {
                 "title": "Local Image Storage",
                 "description": "PCB images stored locally",
-                "path": "/data/images",
+                "path": ".",  # Current directory (which is /data/images)
                 "use_blob_urls": False,
                 "regex_filter": ".*\\.(jpg|jpeg|png)$",
                 "presign": False
             }
 
             url = f"{self.ls_url}/api/storages/localfiles?project={project_id}"
-            headers = {"Authorization": f"Token {self.api_key}"}
             response = self.client.session.post(url, json=storage_config, headers=headers)
             response.raise_for_status()
 
