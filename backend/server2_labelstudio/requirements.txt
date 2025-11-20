@@ -6,8 +6,8 @@ fastapi==0.109.0
 uvicorn[standard]==0.27.0
 python-multipart==0.0.6
 
-# Label Studio SDK (using stable 0.0.32 with Client class)
-label-studio-sdk==0.0.32
+# Label Studio SDK - install latest from PyPI (must have LabelStudio class)
+label-studio-sdk
 
 # HTTP client
 requests==2.31.0

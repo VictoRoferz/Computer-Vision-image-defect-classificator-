@@ -5,7 +5,7 @@ Handles Label Studio API interactions, project setup, and task management
 import time
 from typing import Optional, Dict, Any, List
 from pathlib import Path
-from label_studio_sdk import Client
+from label_studio_sdk import LabelStudio
 from ..config.settings import settings
 from ..utils.logger import setup_logger
 
@@ -56,7 +56,7 @@ class LabelStudioService:
         self.project_id = settings.labelstudio_project_id
         self.project_name = settings.labelstudio_project_name
 
-        self.client: Optional[Client] = None
+        self.client: Optional[LabelStudio] = None
         self.project = None
 
         logger.info(f"LabelStudioService initialized: url={self.ls_url}")
@@ -92,7 +92,7 @@ class LabelStudioService:
                     f"Connecting to Label Studio at {self.ls_url} "
                     f"(attempt {attempt}/{max_retries})"
                 )
-                self.client = Client(url=self.ls_url, api_key=self.api_key)
+                self.client = LabelStudio(base_url=self.ls_url, api_key=self.api_key)
 
                 # Get or create project
                 if self.project_id:
@@ -143,7 +143,7 @@ class LabelStudioService:
             Project instance or None if not found
         """
         try:
-            project = self.client.get_project(self.project_id)
+            project = self.client.projects.get(id=self.project_id)
             logger.info(f"Found existing project: {project.id} - {project.title}")
             return project
         except Exception as e:
@@ -162,19 +162,19 @@ class LabelStudioService:
         """
         try:
             # Check if project exists by name
-            projects = self.client.list_projects()
+            projects = self.client.projects.list()
             for proj in projects:
                 if proj.title == self.project_name:
                     logger.info(f"Found existing project: {proj.id} - {proj.title}")
                     # Get full project details
-                    fullproject = self.client.get_project(proj.id)
+                    fullproject = self.client.projects.get(id=proj.id)
                     # Ensure local storage is configured
                     self._setup_local_storage(proj.id)
                     return fullproject
 
             # Create new project
             logger.info(f"Creating new project: {self.project_name}")
-            project = self.client.create_project(
+            project = self.client.projects.create(
                 title=self.project_name,
                 label_config=LABELING_CONFIG,
                 description="PCB joint defect classification for computer vision training"
@@ -417,7 +417,7 @@ class LabelStudioService:
 
         try:
             # Refresh project to get latest data
-            self.project = self.client.get_project(self.project.id)
+            self.project = self.client.projects.get(id=self.project.id)
 
             return {
                 "project_id": self.project.id,
@@ -443,7 +443,7 @@ class LabelStudioService:
                 return False
 
             # Try to list projects as health check
-            projects = self.client.list_projects()
+            projects = self.client.projects.list()
             return True
 
         except Exception as e:
