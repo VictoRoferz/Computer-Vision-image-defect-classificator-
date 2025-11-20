@@ -6,8 +6,8 @@ fastapi==0.109.0
 uvicorn[standard]==0.27.0
 python-multipart==0.0.6
 
-# Label Studio SDK (v1.0.0+ supports LabelStudio class)
-label-studio-sdk>=1.0.0
+# Label Studio SDK (v1.0.4 confirmed to have LabelStudio class)
+label-studio-sdk==1.0.4
 
 # HTTP client
 requests==2.31.0
