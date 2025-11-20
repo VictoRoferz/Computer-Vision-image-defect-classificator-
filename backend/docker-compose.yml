@@ -90,10 +90,8 @@ services:
     volumes:
       # Mount for development (hot reload)
       - ./server2_labelstudio:/app
-      # Persistent data storage
+      # Persistent data storage (shared with Label Studio)
       - server2_data:/data
-      # Shared volume with Label Studio (for image access)
-      - labelstudio_data:/labelstudio/data
 
     networks:
       - pcb-network
@@ -122,8 +120,9 @@ services:
     environment:
       # Label Studio configuration
       - LABEL_STUDIO_LOCAL_FILES_SERVING_ENABLED=true
-      - LABEL_STUDIO_LOCAL_FILES_DOCUMENT_ROOT=/labelstudio/data
+      - LABEL_STUDIO_LOCAL_FILES_DOCUMENT_ROOT=/data
       - LABEL_STUDIO_DISABLE_SIGNUP_WITHOUT_LINK=${LABELSTUDIO_DISABLE_SIGNUP:-false}
+      - LABEL_STUDIO_LOCAL_FILES_ALLOW_UNDEFINED_URLS=true
 
       # Optional: Pre-configured credentials
       - LABEL_STUDIO_USERNAME=${LABELSTUDIO_USERNAME:-admin@example.com}
@@ -134,9 +133,9 @@ services:
 
     volumes:
       # Label Studio data (projects, tasks, annotations)
-      - labelstudio_data:/labelstudio/data
-      # Shared volume with Server 2 for image access
-      - server2_data:/labelstudio/data:ro
+      - labelstudio_data:/label-studio/data
+      # Shared volume with Server 2 for READ-ONLY image access
+      - server2_data:/data:ro
 
     networks:
       - pcb-network
