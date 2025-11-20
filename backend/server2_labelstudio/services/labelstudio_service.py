@@ -5,8 +5,7 @@ Handles Label Studio API interactions, project setup, and task management
 import time
 from typing import Optional, Dict, Any, List
 from pathlib import Path
-from label_studio_sdk import Client
-from label_studio_sdk.project import Project
+from label_studio_sdk import LabelStudio
 from ..config.settings import settings
 from ..utils.logger import setup_logger
 
@@ -57,18 +56,24 @@ class LabelStudioService:
         self.project_id = settings.labelstudio_project_id
         self.project_name = settings.labelstudio_project_name
 
-        self.client: Optional[Client] = None
-        self.project: Optional[Project] = None
+        self.client: Optional[LabelStudio] = None
+        self.project = None
 
         logger.info(f"LabelStudioService initialized: url={self.ls_url}")
 
-    def initialize(self) -> None:
+    def initialize(self, max_retries: int = 10, retry_delay: float = 3.0) -> None:
         """
-        Initialize Label Studio client and project.
+        Initialize Label Studio client and project with retry logic.
         Creates project if it doesn't exist.
 
+        Retries connection if Label Studio is not ready yet (e.g., still starting up).
+
+        Args:
+            max_retries: Maximum number of connection attempts (default: 10)
+            retry_delay: Initial delay between retries in seconds (default: 3.0)
+
         Raises:
-            RuntimeError: If initialization fails
+            RuntimeError: If initialization fails after all retries
         """
         if not self.api_key:
             logger.warning(
@@ -77,31 +82,60 @@ class LabelStudioService:
             )
             raise RuntimeError("Label Studio API key not configured")
 
-        try:
-            # Create client
-            logger.info(f"Connecting to Label Studio at {self.ls_url}")
-            self.client = Client(url=self.ls_url, api_key=self.api_key)
+        last_error = None
 
-            # Get or create project
-            if self.project_id:
-                self.project = self._get_project()
-            else:
-                self.project = self._create_or_get_project()
+        # Retry loop - Label Studio might still be starting up
+        for attempt in range(1, max_retries + 1):
+            try:
+                # Create client
+                logger.info(
+                    f"Connecting to Label Studio at {self.ls_url} "
+                    f"(attempt {attempt}/{max_retries})"
+                )
+                self.client = LabelStudio(base_url=self.ls_url, api_key=self.api_key)
 
-            if self.project:
-                logger.info(f"Label Studio project ready: ID={self.project.id}")
+                # Get or create project
+                if self.project_id:
+                    self.project = self._get_project()
+                else:
+                    self.project = self._create_or_get_project()
 
-                # Configure webhook if enabled
-                if settings.labelstudio_enable_webhooks:
-                    self._setup_webhook()
-            else:
-                raise RuntimeError("Failed to initialize Label Studio project")
+                if self.project:
+                    logger.info(
+                        f"✓ Label Studio connected successfully! "
+                        f"Project ready: ID={self.project.id}"
+                    )
 
-        except Exception as e:
-            logger.error(f"Label Studio initialization failed: {e}", exc_info=True)
-            raise RuntimeError(f"Label Studio initialization failed: {e}") from e
+                    # Configure webhook if enabled
+                    if settings.labelstudio_enable_webhooks:
+                        self._setup_webhook()
 
-    def _get_project(self) -> Optional[Project]:
+                    return  # Success! Exit the function
+                else:
+                    raise RuntimeError("Failed to initialize Label Studio project")
+
+            except Exception as e:
+                last_error = e
+
+                if attempt < max_retries:
+                    # Calculate delay with exponential backoff
+                    delay = retry_delay * (1.5 ** (attempt - 1))
+                    logger.warning(
+                        f"Connection failed (attempt {attempt}/{max_retries}): {str(e)[:100]}"
+                    )
+                    logger.info(f"Retrying in {delay:.1f} seconds...")
+                    time.sleep(delay)
+                else:
+                    # Final attempt failed
+                    logger.error(
+                        f"Label Studio initialization failed after {max_retries} attempts: {e}",
+                        exc_info=True
+                    )
+                    raise RuntimeError(
+                        f"Label Studio initialization failed after {max_retries} attempts: {e}"
+                    ) from e
+
+    def _get_project(self):
         """
         Get existing project by ID.
 
@@ -109,14 +143,14 @@ class LabelStudioService:
             Project instance or None if not found
         """
         try:
-            project = self.client.get_project(self.project_id)
+            project = self.client.projects.get(id=self.project_id)
             logger.info(f"Found existing project: {project.id} - {project.title}")
             return project
         except Exception as e:
             logger.warning(f"Project {self.project_id} not found: {e}")
             return None
 
-    def _create_or_get_project(self) -> Project:
+    def _create_or_get_project(self):
         """
         Create new project or get existing by name.
 
@@ -128,26 +162,49 @@ class LabelStudioService:
         """
         try:
             # Check if project exists by name
-            projects = self.client.list_projects()
+            projects = self.client.projects.list()
             for proj in projects:
                 if proj.title == self.project_name:
                     logger.info(f"Found existing project: {proj.id} - {proj.title}")
-                    return proj
+                    # Get full project details
+                    fullproject = self.client.projects.get(id=proj.id)
+                    # Ensure local storage is configured
+                    self._setup_local_storage(proj.id)
+                    return fullproject
 
             # Create new project
             logger.info(f"Creating new project: {self.project_name}")
-            project = self.client.create_project(
+            project = self.client.projects.create(
                 title=self.project_name,
                 label_config=LABELING_CONFIG,
                 description="PCB joint defect classification for computer vision training"
             )
 
             logger.info(f"Created project: {project.id}")
+            # Configure local storage for the project
+            self._setup_local_storage(project.id)
             return project
 
         except Exception as e:
             logger.error(f"Failed to create project: {e}", exc_info=True)
             raise RuntimeError(f"Project creation failed: {e}") from e
+
+    def _setup_local_storage(self, project_id: int) -> None:
+        """
+        Configure local file storage for the project.
+        This allows Label Studio to serve images from /data directory.
+        """
+        try:
+            logger.info(f"Creating local storage for project {project_id}")
+            storage = self.client.import_storage.local.create(
+                project=project_id,
+                path="/data",  # Path to the images directory
+                use_blob_urls=False,
+                regex_filter=".*\\.(jpg|jpeg|png)$"
+            )
+            logger.info(f"Local storage configured for project {project_id}, ID={storage.id}")
+        except Exception as e:
+            logger.warning(f"Failed to setup local storage: {e}", exc_info=True)
 
     def _setup_webhook(self) -> None:
         """
@@ -198,10 +255,9 @@ class LabelStudioService:
 
         try:
             # Construct image URL (accessible from Label Studio container)
-            # Label Studio needs to access the image via HTTP or local path
-            # We'll use the local path approach since images are mounted
+            # Using local-files URL format for local storage integration
             relative_path = str(image_path.relative_to(settings.data_root))
-            image_url = f"/labelstudio/data/{relative_path}"
+            image_url = f"/data/local-files/?d={relative_path}"
 
             # Prepare task data
             task_data = {
@@ -220,11 +276,19 @@ class LabelStudioService:
             logger.info(f"Creating task for image: {image_path.name}")
             logger.debug(f"Task data: {task_data}")
 
-            # Create task
-            task = self.project.create_task(
-                data=task_data,
-                meta=task_meta
-            )
+            # Create task using SDK
+            # Note: Using direct API call as SDK's task creation might have different signature
+            task_payload = {
+                "data": task_data,
+                "meta": task_meta,
+                "project": self.project.id
+            }
+
+            url = f"{self.ls_url}/api/projects/{self.project.id}/tasks"
+            headers = {"Authorization": f"Token {self.api_key}"}
+            response = self.client.session.post(url, json=task_payload, headers=headers)
+            response.raise_for_status()
+            task = response.json()
 
             logger.info(f"Task created: ID={task['id']}")
 
@@ -329,7 +393,7 @@ class LabelStudioService:
 
         try:
             # Refresh project to get latest data
-            self.project = self.client.get_project(self.project.id)
+            self.project = self.client.projects.get(id=self.project.id)
 
             return {
                 "project_id": self.project.id,
@@ -354,8 +418,8 @@ class LabelStudioService:
             if not self.client:
                 return False
 
-            # Try to get project as health check
-            projects = self.client.list_projects()
+            # Try to list projects as health check
+            projects = self.client.projects.list()
             return True
 
         except Exception as e:
