@@ -5,7 +5,7 @@ Handles Label Studio API interactions, project setup, and task management
 import time
 from typing import Optional, Dict, Any, List
 from pathlib import Path
-from label_studio_sdk import LabelStudio
+from label_studio_sdk import Client
 from ..config.settings import settings
 from ..utils.logger import setup_logger
 
@@ -56,7 +56,7 @@ class LabelStudioService:
         self.project_id = settings.labelstudio_project_id
         self.project_name = settings.labelstudio_project_name
 
-        self.client: Optional[LabelStudio] = None
+        self.client: Optional[Client] = None
         self.project = None
 
         logger.info(f"LabelStudioService initialized: url={self.ls_url}")
@@ -92,7 +92,7 @@ class LabelStudioService:
                     f"Connecting to Label Studio at {self.ls_url} "
                     f"(attempt {attempt}/{max_retries})"
                 )
-                self.client = LabelStudio(base_url=self.ls_url, api_key=self.api_key)
+                self.client = Client(url=self.ls_url, api_key=self.api_key)
 
                 # Get or create project
                 if self.project_id:
@@ -143,7 +143,7 @@ class LabelStudioService:
             Project instance or None if not found
         """
         try:
-            project = self.client.projects.get(id=self.project_id)
+            project = self.client.get_project(self.project_id)
             logger.info(f"Found existing project: {project.id} - {project.title}")
             return project
         except Exception as e:
@@ -162,19 +162,19 @@ class LabelStudioService:
         """
         try:
             # Check if project exists by name
-            projects = self.client.projects.list()
+            projects = self.client.list_projects()
             for proj in projects:
                 if proj.title == self.project_name:
                     logger.info(f"Found existing project: {proj.id} - {proj.title}")
                     # Get full project details
-                    fullproject = self.client.projects.get(id=proj.id)
+                    fullproject = self.client.get_project(proj.id)
                     # Ensure local storage is configured
                     self._setup_local_storage(proj.id)
                     return fullproject
 
             # Create new project
             logger.info(f"Creating new project: {self.project_name}")
-            project = self.client.projects.create(
+            project = self.client.create_project(
                 title=self.project_name,
                 label_config=LABELING_CONFIG,
                 description="PCB joint defect classification for computer vision training"
@@ -193,16 +193,40 @@ class LabelStudioService:
         """
         Configure local file storage for the project.
         This allows Label Studio to serve images from /data directory.
+        Uses direct API calls since old SDK doesn't have import_storage methods.
         """
         try:
             logger.info(f"Creating local storage for project {project_id}")
-            storage = self.client.import_storage.local.create(
-                project=project_id,
-                path="/data",  # Path to the images directory
-                use_blob_urls=False,
-                regex_filter=".*\\.(jpg|jpeg|png)$"
-            )
-            logger.info(f"Local storage configured for project {project_id}, ID={storage.id}")
+
+            # Check if storage already exists
+            list_url = f"{self.ls_url}/api/storages/localfiles?project={project_id}"
+            headers = {"Authorization": f"Token {self.api_key}"}
+            response = self.client.session.get(list_url, headers=headers)
+            response.raise_for_status()
+
+            existing_storages = response.json()
+            if existing_storages:
+                storage_id = existing_storages[0]['id']
+                logger.info(f"Local storage already exists for project {project_id}, ID={storage_id}")
+                return
+
+            # Create new storage
+            storage_config = {
+                "project": project_id,
+                "title": "Local Image Storage",
+                "description": "PCB images from /data directory",
+                "path": "/data",
+                "use_blob_urls": False,
+                "regex_filter": ".*\\.(jpg|jpeg|png)$"
+            }
+
+            create_url = f"{self.ls_url}/api/storages/localfiles"
+            response = self.client.session.post(create_url, json=storage_config, headers=headers)
+            response.raise_for_status()
+
+            storage = response.json()
+            logger.info(f"Local storage configured for project {project_id}, ID={storage['id']}")
+
         except Exception as e:
             logger.warning(f"Failed to setup local storage: {e}", exc_info=True)
 
@@ -393,7 +417,7 @@ class LabelStudioService:
 
         try:
             # Refresh project to get latest data
-            self.project = self.client.projects.get(id=self.project.id)
+            self.project = self.client.get_project(self.project.id)
 
             return {
                 "project_id": self.project.id,
@@ -419,7 +443,7 @@ class LabelStudioService:
                 return False
 
             # Try to list projects as health check
-            projects = self.client.projects.list()
+            projects = self.client.list_projects()
             return True
 
         except Exception as e:
