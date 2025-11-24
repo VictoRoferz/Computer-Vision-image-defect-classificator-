@@ -6,9 +6,10 @@ FROM python:3.11-slim-bullseye
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies (minimal set)
+# Install system dependencies (minimal set + git for SDK installation)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python dependencies
