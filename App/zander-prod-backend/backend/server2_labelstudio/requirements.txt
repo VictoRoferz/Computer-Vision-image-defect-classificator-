@@ -1,0 +1,21 @@
+# Server 2 (Label Studio Service - Raspberry Pi 5) Dependencies
+# Optimized for embedded systems
+
+# Web framework
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.6
+
+# Label Studio SDK
+label-studio-sdk>=2.0.0
+
+# HTTP client
+requests>=2.31.0
+
+# Configuration management
+# Relaxed constraint to allow newer Pydantic versions required by SDK v2
+pydantic>=2.5.3
+pydantic-settings>=2.1.0
+
+# Utilities
+python-dotenv>=1.0.0
