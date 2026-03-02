@@ -10,6 +10,7 @@ from typing import Optional, Tuple
 from config.settings import settings
 from utils.logger import setup_logger
 
+
 logger = setup_logger(__name__, level=settings.log_level)
 
 
@@ -213,7 +214,7 @@ class CameraService:
             cap.release()
 
         return status
-
+    
 
 # Global camera service instance
 camera_service = CameraService()
