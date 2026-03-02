@@ -1,0 +1,120 @@
+version: '3.8'
+
+services:
+  # ============================================================
+  # Server 2: Label Studio Service (Raspberry Pi 5)
+  # ============================================================
+  server2:
+    build:
+      context: ./server2_labelstudio
+      dockerfile: Dockerfile
+    container_name: pcb-server2-labelstudio
+    ports:
+      - "8002:8002"
+    environment:
+      # Storage configuration
+      - DATA_ROOT=/data
+      - UNLABELED_DIR=/data/unlabeled
+      - LABELED_DIR=/data/labeled
+      - USE_CONTENT_ADDRESSING=${SERVER2_USE_CONTENT_ADDRESSING:-true}
+
+      # Label Studio configuration
+      - LABELSTUDIO_URL=http://labelstudio:8080
+      - LABELSTUDIO_API_KEY=${LABELSTUDIO_API_KEY}
+      - LABELSTUDIO_PROJECT_ID=${LABELSTUDIO_PROJECT_ID:-}
+      - LABELSTUDIO_PROJECT_NAME=${LABELSTUDIO_PROJECT_NAME:-PCB Defect Classification}
+      - LABELSTUDIO_AUTO_CREATE_PROJECT=${LABELSTUDIO_AUTO_CREATE_PROJECT:-true}
+      - LABELSTUDIO_ENABLE_WEBHOOKS=${LABELSTUDIO_ENABLE_WEBHOOKS:-true}
+
+      # Webhook configuration
+      - WEBHOOK_ENABLED=${WEBHOOK_ENABLED:-true}
+
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+      # Performance
+      - MAX_UPLOAD_SIZE_MB=${MAX_UPLOAD_SIZE_MB:-50}
+
+    volumes:
+      # Mount for development (hot reload)
+      - ./server2_labelstudio:/app
+      # Persistent data storage
+      - server2_data:/data
+      # Shared volume mit Label Studio (für Image Access)
+
+    networks:
+      - pcb-network
+
+    depends_on:
+      - labelstudio
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ============================================================
+  # Label Studio: Annotation Platform
+  # ============================================================
+  labelstudio:
+    image: heartexlabs/label-studio:latest
+    container_name: pcb-labelstudio
+    ports:
+      - "8080:8080"
+    environment:
+      # Label Studio configuration
+      - LABEL_STUDIO_LOCAL_FILES_SERVING_ENABLED=true
+      - LABEL_STUDIO_LOCAL_FILES_DOCUMENT_ROOT=/data
+      - LABEL_STUDIO_DISABLE_SIGNUP_WITHOUT_LINK=${LABELSTUDIO_DISABLE_SIGNUP:-false}
+      - LABEL_STUDIO_LOCAL_FILES_ALLOW_UNDEFINED_URLS=true
+      - LABEL_STUDIO_LOCAL_FILES_ALLOW_UNDEFINED_URLS=true
+
+      # Optional: Pre-configured credentials
+      - LABEL_STUDIO_USERNAME=${LABELSTUDIO_USERNAME:-admin@example.com}
+      - LABEL_STUDIO_PASSWORD=${LABELSTUDIO_PASSWORD:-admin123}
+
+      # Database (uses SQLite by default)
+      - LABEL_STUDIO_HOST=${LABELSTUDIO_HOST:-}
+
+    volumes:
+      # Label Studio data (projects, tasks, annotations)
+      - labelstudio_data:/label-studio/data
+      # Shared volume mit Server 2 für Image Access
+      - server2_data:/data:ro
+
+
+    networks:
+      - pcb-network
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+# ============================================================
+# Volumes
+# ============================================================
+volumes:
+  server2_data:
+    driver: local
+    name: pcb_server2_data
+
+  labelstudio_data:
+    driver: local
+    name: pcb_labelstudio_data
+
+# ============================================================
+# Networks
+# ============================================================
+networks:
+  pcb-network:
+    driver: bridge
+    name: pcb_network
