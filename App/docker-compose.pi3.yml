@@ -11,6 +11,7 @@ services:
     container_name: pcb-server1-camera
     ports:
       - "8001:8001"
+    privileged: true  # Required for camera and GPIO access (GPIO nur nötig, wenn /button-Route genutzt wird)
     environment:
       # Camera configuration
       - USE_CAMERA=${SERVER1_USE_CAMERA:-false}  # Set to false for Mac testing
@@ -38,6 +39,8 @@ services:
 
     devices:
       - "/dev/video0:/dev/video0"
+      # Nur nötig, wenn der Server selbst noch GPIO nutzt (z.B. /api/v1/button):
+      - "/dev/gpiomem:/dev/gpiomem"
 
     networks:
       - pcb-network
@@ -50,6 +53,30 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  # ============================================================
+  # Button Listener: überwacht GPIO 23 und triggert Route
+  # ============================================================
+  button-listener:
+    build:
+      context: ./server1_camera
+      dockerfile: Dockerfile
+    container_name: pcb-button-listener
+    privileged: true
+    environment:
+      - SERVER1_URL=http://pcb-server1-camera:8001
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ./server1_camera:/app
+    devices:
+      - "/dev/gpiomem:/dev/gpiomem"
+    networks:
+      - pcb-network
+    depends_on:
+      - server1
+    restart: unless-stopped
+    command: >
+      python -m scripts.button_listener
 
 # ============================================================
 # Volumes
@@ -66,5 +93,3 @@ networks:
   pcb-network:
     driver: bridge
     name: pcb_network
-
-
