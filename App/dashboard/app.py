@@ -2,12 +2,13 @@
 Dashboard Web UI for PCB Defect Classification System.
 Provides a single-page interface for both Label and Inference workflows.
 """
+import base64
 import io
 import os
 import requests
 from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, Request, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -76,12 +77,17 @@ async def proxy_capture():
 
 @app.post("/api/predict")
 async def proxy_predict(file: UploadFile = File(...)):
-    """Forward image to inference service for prediction."""
+    """Forward image to inference service for prediction. Returns prediction + base64 image."""
     try:
-        files = {"file": (file.filename, await file.read(), file.content_type)}
+        image_bytes = await file.read()
+        files = {"file": (file.filename, io.BytesIO(image_bytes), file.content_type)}
         r = requests.post(f"{INFERENCE_URL}/api/v1/predict", files=files, timeout=60)
         r.raise_for_status()
-        return r.json()
+
+        result = r.json()
+        # Include the image as base64 so the frontend can display it with overlays
+        result["image_base64"] = base64.b64encode(image_bytes).decode("utf-8")
+        return result
     except requests.RequestException as e:
         raise HTTPException(status_code=502, detail=f"Inference service error: {e}")
 
@@ -108,6 +114,31 @@ async def proxy_labeled_images():
         raise HTTPException(status_code=502, detail=f"Storage service error: {e}")
 
 
+@app.get("/api/images/unlabeled")
+async def proxy_unlabeled_images():
+    """List unlabeled images."""
+    try:
+        r = requests.get(f"{SERVER2_URL}/api/v1/images/unlabeled", timeout=5)
+        r.raise_for_status()
+        return r.json()
+    except requests.RequestException as e:
+        raise HTTPException(status_code=502, detail=f"Storage service error: {e}")
+
+
+@app.get("/api/images/serve/{category:path}")
+async def proxy_serve_image(category: str):
+    """Proxy image file from server2 storage to the browser."""
+    try:
+        r = requests.get(f"{SERVER2_URL}/api/v1/images/serve/{category}", timeout=10)
+        r.raise_for_status()
+        return Response(
+            content=r.content,
+            media_type=r.headers.get("content-type", "image/jpeg"),
+        )
+    except requests.RequestException as e:
+        raise HTTPException(status_code=502, detail=f"Image serving error: {e}")
+
+
 @app.get("/api/inference/status")
 async def proxy_inference_status():
     """Get inference model status."""
@@ -123,7 +154,7 @@ async def proxy_inference_status():
 async def capture_and_predict():
     """
     Capture image from camera and run inference.
-    Flow: Dashboard → Server 1 (capture) → Server 3 (predict) → Dashboard (results)
+    Returns prediction results + base64-encoded captured image.
     """
     try:
         # Step 1: Capture image from camera service
@@ -141,6 +172,8 @@ async def capture_and_predict():
         result = pred_r.json()
         result["source"] = "camera_capture"
         result["image_name"] = filename
+        # Include image as base64 for frontend display
+        result["image_base64"] = base64.b64encode(image_bytes).decode("utf-8")
         return result
 
     except requests.RequestException as e:
@@ -151,7 +184,7 @@ async def capture_and_predict():
 async def capture_label_and_predict():
     """
     Full flow: capture image → upload to storage (for labeling) → run inference.
-    Used when you want to both label AND get a prediction for the same image.
+    Returns prediction results + base64-encoded captured image.
     """
     try:
         # Step 1: Capture and upload to server2 (label flow)
@@ -175,6 +208,8 @@ async def capture_label_and_predict():
         result["source"] = "camera_capture"
         result["also_uploaded_to_labelstudio"] = True
         result["capture_info"] = capture_data
+        # Include image as base64 for frontend display
+        result["image_base64"] = base64.b64encode(image_bytes).decode("utf-8")
         return result
 
     except requests.RequestException as e:
