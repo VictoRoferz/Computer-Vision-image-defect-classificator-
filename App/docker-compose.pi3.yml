@@ -21,6 +21,7 @@ services:
 
       # Server 2 connection
       - SERVER2_URL=${SERVER2_URL:-http://pcb-server2-labelstudio:8002}
+      - INFERENCE_URL=${INFERENCE_URL:-http://pcb-inference:8003}
       - UPLOAD_TIMEOUT=${SERVER1_UPLOAD_TIMEOUT:-30}
       - UPLOAD_RETRIES=${SERVER1_UPLOAD_RETRIES:-3}
 
@@ -65,6 +66,8 @@ services:
     privileged: true
     environment:
       - SERVER1_URL=http://pcb-server1-camera:8001
+      - BUTTON_MODE=${BUTTON_MODE:-label}
+      - BUTTON_GPIO_PIN=${BUTTON_GPIO_PIN:-23}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
       - ./server1_camera:/app
