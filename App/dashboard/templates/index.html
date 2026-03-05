@@ -27,6 +27,7 @@
   <nav class="tabs">
     <button class="tab active" data-tab="label">Label Mode</button>
     <button class="tab" data-tab="inference">Inference Mode</button>
+    <button class="tab" data-tab="gallery">Image Gallery</button>
     <button class="tab" data-tab="training">Training Data</button>
   </nav>
 
@@ -67,7 +68,7 @@
         <button id="btn-capture-label-predict" class="btn btn-secondary">Capture, Label &amp; Predict</button>
       </div>
 
-      <!-- Upload area (hidden by default when camera mode selected) -->
+      <!-- Upload area -->
       <div id="upload-section">
         <p class="separator-text" id="upload-separator">Or upload an image manually:</p>
         <div class="upload-area" id="drop-zone">
@@ -90,6 +91,27 @@
     </div>
   </section>
 
+  <!-- ── IMAGE GALLERY ── -->
+  <section id="tab-gallery" class="tab-content">
+    <div class="card">
+      <h2>Image Gallery</h2>
+      <p>Browse captured images stored in the system.</p>
+
+      <div class="gallery-tabs">
+        <button class="gallery-tab active" data-gallery="unlabeled">Unlabeled</button>
+        <button class="gallery-tab" data-gallery="labeled">Labeled</button>
+      </div>
+
+      <div class="actions" style="margin-top: 12px;">
+        <button id="btn-refresh-gallery" class="btn btn-primary">Refresh</button>
+      </div>
+
+      <div id="gallery-grid" class="gallery-grid" style="margin-top: 16px;">
+        <p style="color:var(--muted)">Click Refresh to load images.</p>
+      </div>
+    </div>
+  </section>
+
   <!-- ── TRAINING DATA ── -->
   <section id="tab-training" class="tab-content">
     <div class="card">
@@ -108,6 +130,15 @@
       <div id="training-labeling-progress">Loading...</div>
     </div>
   </section>
+
+  <!-- ── IMAGE LIGHTBOX MODAL ── -->
+  <div id="lightbox" class="lightbox hidden" onclick="if(event.target===this)this.classList.add('hidden')">
+    <div class="lightbox-content">
+      <button class="lightbox-close" onclick="document.getElementById('lightbox').classList.add('hidden')">&times;</button>
+      <img id="lightbox-img" src="" alt="Full size image">
+      <div id="lightbox-info" class="lightbox-info"></div>
+    </div>
+  </div>
 
   <script src="/static/app.js"></script>
 </body>
