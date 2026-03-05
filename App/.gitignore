@@ -1,0 +1,14 @@
+# Environment
+.env
+
+# Python
+__pycache__/
+*.pyc
+
+# Model weights (downloaded at runtime)
+*.pt
+*.onnx
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PCB Defect Classification Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <h1>PCB Defect Classification</h1>
+    <div id="service-status" class="status-bar">Loading services...</div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="label">Label Mode</button>
+    <button class="tab" data-tab="inference">Inference Mode</button>
+  </nav>
+
+  <!-- ── LABEL MODE ── -->
+  <section id="tab-label" class="tab-content active">
+    <div class="card">
+      <h2>Capture &amp; Label Workflow</h2>
+      <p>Capture an image from the camera (or sample), upload it, then label it in Label Studio.</p>
+
+      <div class="actions">
+        <button id="btn-capture" class="btn btn-primary">Capture Image</button>
+        <a href="{{ labelstudio_url }}" target="_blank" class="btn btn-secondary">Open Label Studio</a>
+      </div>
+
+      <div id="capture-result" class="result hidden"></div>
+    </div>
+
+    <div class="card">
+      <h2>Storage Stats</h2>
+      <div id="storage-stats">Loading...</div>
+    </div>
+  </section>
+
+  <!-- ── INFERENCE MODE ── -->
+  <section id="tab-inference" class="tab-content">
+    <div class="card">
+      <h2>Defect Detection</h2>
+      <p>Upload a PCB image to run YOLOv8 defect detection.</p>
+
+      <div class="upload-area" id="drop-zone">
+        <p>Drag &amp; drop an image here, or click to select</p>
+        <input type="file" id="file-input" accept="image/*" hidden>
+      </div>
+
+      <div id="inference-loading" class="hidden">
+        <div class="spinner"></div>
+        <p>Running inference...</p>
+      </div>
+
+      <div id="inference-result" class="result hidden"></div>
+    </div>
+
+    <div class="card">
+      <h2>Model Info</h2>
+      <div id="model-info">Loading...</div>
+    </div>
+  </section>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
