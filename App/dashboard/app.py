@@ -2,6 +2,7 @@
 Dashboard Web UI for PCB Defect Classification System.
 Provides a single-page interface for both Label and Inference workflows.
 """
+import io
 import os
 import requests
 from pathlib import Path
@@ -116,3 +117,87 @@ async def proxy_inference_status():
         return r.json()
     except requests.RequestException as e:
         raise HTTPException(status_code=502, detail=f"Inference service error: {e}")
+
+
+@app.post("/api/capture-and-predict")
+async def capture_and_predict():
+    """
+    Capture image from camera and run inference.
+    Flow: Dashboard → Server 1 (capture) → Server 3 (predict) → Dashboard (results)
+    """
+    try:
+        # Step 1: Capture image from camera service
+        cap_r = requests.post(f"{SERVER1_URL}/api/v1/capture-image", timeout=30)
+        cap_r.raise_for_status()
+
+        image_bytes = cap_r.content
+        filename = cap_r.headers.get("X-Image-Filename", "capture.jpg")
+
+        # Step 2: Send captured image to inference service
+        files = {"file": (filename, io.BytesIO(image_bytes), "image/jpeg")}
+        pred_r = requests.post(f"{INFERENCE_URL}/api/v1/predict", files=files, timeout=60)
+        pred_r.raise_for_status()
+
+        result = pred_r.json()
+        result["source"] = "camera_capture"
+        result["image_name"] = filename
+        return result
+
+    except requests.RequestException as e:
+        raise HTTPException(status_code=502, detail=f"Capture-and-predict failed: {e}")
+
+
+@app.post("/api/capture-label-and-predict")
+async def capture_label_and_predict():
+    """
+    Full flow: capture image → upload to storage (for labeling) → run inference.
+    Used when you want to both label AND get a prediction for the same image.
+    """
+    try:
+        # Step 1: Capture and upload to server2 (label flow)
+        cap_r = requests.post(f"{SERVER1_URL}/api/v1/capture", timeout=30)
+        cap_r.raise_for_status()
+        capture_data = cap_r.json()
+
+        # Step 2: Also capture a fresh image for inference
+        cap_img_r = requests.post(f"{SERVER1_URL}/api/v1/capture-image", timeout=30)
+        cap_img_r.raise_for_status()
+
+        image_bytes = cap_img_r.content
+        filename = cap_img_r.headers.get("X-Image-Filename", "capture.jpg")
+
+        # Step 3: Run inference
+        files = {"file": (filename, io.BytesIO(image_bytes), "image/jpeg")}
+        pred_r = requests.post(f"{INFERENCE_URL}/api/v1/predict", files=files, timeout=60)
+        pred_r.raise_for_status()
+
+        result = pred_r.json()
+        result["source"] = "camera_capture"
+        result["also_uploaded_to_labelstudio"] = True
+        result["capture_info"] = capture_data
+        return result
+
+    except requests.RequestException as e:
+        raise HTTPException(status_code=502, detail=f"Capture-label-predict failed: {e}")
+
+
+@app.get("/api/labeled-images")
+async def list_labeled_images():
+    """List all labeled images available for training."""
+    try:
+        r = requests.get(f"{SERVER2_URL}/api/v1/images/labeled", timeout=10)
+        r.raise_for_status()
+        return r.json()
+    except requests.RequestException as e:
+        raise HTTPException(status_code=502, detail=f"Storage service error: {e}")
+
+
+@app.get("/api/labelstudio/stats")
+async def proxy_labelstudio_stats():
+    """Get Label Studio project statistics (labeling progress)."""
+    try:
+        r = requests.get(f"{SERVER2_URL}/api/v1/labelstudio/stats", timeout=5)
+        r.raise_for_status()
+        return r.json()
+    except requests.RequestException as e:
+        raise HTTPException(status_code=502, detail=f"Storage service error: {e}")

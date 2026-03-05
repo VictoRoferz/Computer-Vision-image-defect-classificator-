@@ -1,9 +1,11 @@
 """
-API Routes for Server 1 (Camera Service - Raspberry Pi 3)
-Provides endpoints for camera control and image capture
+API Routes for Server 1 (Camera Service)
+Provides endpoints for camera control, image capture, and capture-to-predict flow.
 """
+import io
+import requests as http_requests
 from fastapi import APIRouter, HTTPException, BackgroundTasks
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from typing import Dict, Any
 from services.camera_service import camera_service
 from services.upload_service import upload_service
@@ -166,6 +168,41 @@ async def test_camera() -> Dict[str, Any]:
         )
 
 
+@router.post("/capture-image")
+async def capture_image_only() -> Response:
+    """
+    Capture image from camera and return the raw image bytes.
+    Used by the dashboard for the capture-and-predict inference flow.
+    Does NOT upload to Server 2.
+    """
+    logger.info("Capture-image request (for inference)")
+
+    try:
+        image_path = camera_service.capture()
+
+        if not image_path:
+            raise HTTPException(status_code=500, detail="Failed to capture image")
+
+        # Read image bytes
+        image_bytes = image_path.read_bytes()
+        filename = image_path.name
+
+        # Cleanup temp file
+        camera_service.cleanup(image_path)
+
+        return Response(
+            content=image_bytes,
+            media_type="image/jpeg",
+            headers={"X-Image-Filename": filename}
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Capture-image failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Capture failed: {str(e)}")
+
+
 @router.post("/test-upload", response_model=Dict[str, Any])
 async def test_upload() -> Dict[str, Any]:
     """
@@ -204,3 +241,44 @@ async def test_upload() -> Dict[str, Any]:
             status_code=500,
             detail=f"Upload test failed: {str(e)}"
         )
+
+
+@router.post("/button-capture-predict", response_model=Dict[str, Any])
+async def button_capture_and_predict() -> Dict[str, Any]:
+    """
+    Capture image and run inference in one step.
+    Used by the GPIO button listener in inference mode.
+    Captures locally, sends to the inference service, returns prediction.
+    """
+    logger.info("Button capture-and-predict triggered")
+
+    try:
+        image_path = camera_service.capture()
+        if not image_path:
+            raise HTTPException(status_code=500, detail="Failed to capture image")
+
+        image_bytes = image_path.read_bytes()
+        filename = image_path.name
+        camera_service.cleanup(image_path)
+
+        # Forward to inference service
+        inference_url = settings.inference_url
+        files = {"file": (filename, io.BytesIO(image_bytes), "image/jpeg")}
+        r = http_requests.post(
+            f"{inference_url}/api/v1/predict", files=files, timeout=60
+        )
+        r.raise_for_status()
+
+        result = r.json()
+        result["source"] = "button_capture"
+        result["image_name"] = filename
+        return result
+
+    except HTTPException:
+        raise
+    except http_requests.RequestException as e:
+        logger.error(f"Inference request failed: {e}")
+        raise HTTPException(status_code=502, detail=f"Inference service error: {e}")
+    except Exception as e:
+        logger.error(f"Button capture-predict failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed: {str(e)}")

@@ -17,6 +17,7 @@ services:
       - CAMERA_WIDTH=${CAMERA_WIDTH:-1920}
       - CAMERA_HEIGHT=${CAMERA_HEIGHT:-1080}
       - SERVER2_URL=http://pcb-server2-labelstudio:8002
+      - INFERENCE_URL=http://pcb-inference:8003
       - UPLOAD_TIMEOUT=${UPLOAD_TIMEOUT:-30}
       - UPLOAD_RETRIES=${UPLOAD_RETRIES:-3}
       - TEMP_DIR=/tmp/camera_captures

@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     # Fallback image (for testing without camera)
     fallback_image_path: str = "sample.jpg"
 
+    # Inference service connection (for button-triggered predictions)
+    inference_url: str = "http://pcb-inference:8003"
+
     # Server 2 (Raspberry Pi 5) connection
     server2_url: str = "http://localhost:8002"
     server2_upload_endpoint: str = "/api/v1/upload"

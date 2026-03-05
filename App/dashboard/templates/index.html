@@ -12,16 +12,29 @@
     <div id="service-status" class="status-bar">Loading services...</div>
   </header>
 
+  <!-- ── MODE SELECTOR ── -->
+  <div class="card mode-selector">
+    <div class="mode-row">
+      <span class="mode-label">Input mode:</span>
+      <button class="mode-btn active" data-mode="camera">Camera (RPi / Webcam)</button>
+      <button class="mode-btn" data-mode="upload">Upload / Drag &amp; Drop</button>
+    </div>
+    <p class="mode-hint" id="mode-hint">
+      Using camera via Server 1. On MacBook set <code>USE_CAMERA=true</code> in .env.
+    </p>
+  </div>
+
   <nav class="tabs">
     <button class="tab active" data-tab="label">Label Mode</button>
     <button class="tab" data-tab="inference">Inference Mode</button>
+    <button class="tab" data-tab="training">Training Data</button>
   </nav>
 
   <!-- ── LABEL MODE ── -->
   <section id="tab-label" class="tab-content active">
     <div class="card">
       <h2>Capture &amp; Label Workflow</h2>
-      <p>Capture an image from the camera (or sample), upload it, then label it in Label Studio.</p>
+      <p>Capture an image from the camera (or sample), upload it to storage, then label it in Label Studio.</p>
 
       <div class="actions">
         <button id="btn-capture" class="btn btn-primary">Capture Image</button>
@@ -35,17 +48,32 @@
       <h2>Storage Stats</h2>
       <div id="storage-stats">Loading...</div>
     </div>
+
+    <div class="card">
+      <h2>Labeling Progress</h2>
+      <div id="labeling-progress">Loading...</div>
+    </div>
   </section>
 
   <!-- ── INFERENCE MODE ── -->
   <section id="tab-inference" class="tab-content">
     <div class="card">
       <h2>Defect Detection</h2>
-      <p>Upload a PCB image to run YOLOv8 defect detection.</p>
+      <p>Capture from camera or upload an image to run YOLOv8 defect detection.</p>
 
-      <div class="upload-area" id="drop-zone">
-        <p>Drag &amp; drop an image here, or click to select</p>
-        <input type="file" id="file-input" accept="image/*" hidden>
+      <!-- Camera capture buttons -->
+      <div id="camera-actions" class="actions" style="margin-bottom: 16px;">
+        <button id="btn-capture-predict" class="btn btn-primary">Capture &amp; Predict</button>
+        <button id="btn-capture-label-predict" class="btn btn-secondary">Capture, Label &amp; Predict</button>
+      </div>
+
+      <!-- Upload area (hidden by default when camera mode selected) -->
+      <div id="upload-section">
+        <p class="separator-text" id="upload-separator">Or upload an image manually:</p>
+        <div class="upload-area" id="drop-zone">
+          <p>Drag &amp; drop an image here, or click to select</p>
+          <input type="file" id="file-input" accept="image/*" hidden>
+        </div>
       </div>
 
       <div id="inference-loading" class="hidden">
@@ -59,6 +87,25 @@
     <div class="card">
       <h2>Model Info</h2>
       <div id="model-info">Loading...</div>
+    </div>
+  </section>
+
+  <!-- ── TRAINING DATA ── -->
+  <section id="tab-training" class="tab-content">
+    <div class="card">
+      <h2>Labeled Training Data</h2>
+      <p>View labeled images available for training your model.</p>
+
+      <div class="actions">
+        <button id="btn-refresh-labeled" class="btn btn-primary">Refresh List</button>
+      </div>
+
+      <div id="labeled-images-list" class="result" style="margin-top:16px;">Click refresh to load labeled images.</div>
+    </div>
+
+    <div class="card">
+      <h2>Labeling Progress</h2>
+      <div id="training-labeling-progress">Loading...</div>
     </div>
   </section>
 
