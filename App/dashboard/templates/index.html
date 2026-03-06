@@ -44,20 +44,23 @@
   <section id="tab-label" class="tab-content active">
     <div class="card">
       <h2>Capture &amp; Label Workflow</h2>
-      <p>Capture an image, preview it, then upload to Label Studio for labeling.</p>
+      <p>Capture an image to send it to Label Studio as a new task. The photo appears below.</p>
 
       <div class="actions">
         <button id="btn-capture" class="btn btn-primary">Capture Image</button>
         <a href="{{ labelstudio_url }}" target="_blank" class="btn btn-secondary">Open Label Studio</a>
       </div>
 
-      <!-- Captured image preview -->
-      <div id="capture-preview" class="capture-preview hidden">
-        <h3>Captured Image</h3>
+      <div id="capture-result" class="result hidden"></div>
+    </div>
+
+    <!-- Captured photo display (separate card, shown after capture) -->
+    <div id="captured-photo-card" class="card hidden">
+      <h2>Captured Photo</h2>
+      <div id="capture-info" class="capture-info"></div>
+      <div class="captured-photo-display">
         <img id="capture-preview-img" src="" alt="Captured image">
       </div>
-
-      <div id="capture-result" class="result hidden"></div>
     </div>
 
     <div class="card">

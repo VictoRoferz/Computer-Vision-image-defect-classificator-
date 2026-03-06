@@ -309,18 +309,33 @@ header h1 { font-size: 1.5rem; font-weight: 600; }
   border-radius: var(--radius);
 }
 
-/* ── Capture preview (label mode) ── */
-.capture-preview {
-  margin-top: 16px;
+/* ── Captured photo display (label mode) ── */
+.captured-photo-display {
   text-align: center;
+  margin-top: 12px;
 }
 
-.capture-preview img {
+.captured-photo-display img {
   max-width: 100%;
-  max-height: 400px;
+  max-height: 500px;
   border-radius: var(--radius);
-  border: 1px solid var(--border);
+  border: 2px solid var(--border);
   object-fit: contain;
+  background: #000;
+}
+
+.capture-info {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+
+.capture-info .task-link {
+  color: var(--accent);
+  text-decoration: none;
+}
+.capture-info .task-link:hover {
+  text-decoration: underline;
 }
 
 /* ── Inference image with bounding boxes ── */

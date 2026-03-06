@@ -128,14 +128,15 @@ document.addEventListener('DOMContentLoaded', () => {
   // ── Capture button (Label Mode) ──
   const captureBtn = document.getElementById('btn-capture');
   const captureResult = document.getElementById('capture-result');
-  const capturePreview = document.getElementById('capture-preview');
+  const capturedPhotoCard = document.getElementById('captured-photo-card');
   const capturePreviewImg = document.getElementById('capture-preview-img');
+  const captureInfo = document.getElementById('capture-info');
 
   captureBtn.addEventListener('click', async () => {
     captureBtn.disabled = true;
     captureBtn.textContent = 'Capturing...';
     captureResult.classList.add('hidden');
-    capturePreview.classList.add('hidden');
+    capturedPhotoCard.classList.add('hidden');
 
     try {
       let data;
@@ -165,19 +166,34 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
 
-      // Show image preview
+      // Show the captured photo in its own card
       if (data.image_base64) {
         capturePreviewImg.src = 'data:image/jpeg;base64,' + data.image_base64;
-        capturePreview.classList.remove('hidden');
+
+        // Build info line with task ID and Label Studio link
+        const s2 = data.server2_response || {};
+        const taskId = s2.task_id || data.task_id;
+        const imageName = data.image_name || s2.filename || 'N/A';
+        const labelStudioUrl = document.querySelector('a[href*="labelstudio"], a.btn-secondary')?.href || '';
+
+        let infoHtml = `<strong style="color:var(--success)">Sent to Label Studio</strong> &mdash; `;
+        infoHtml += `Image: <strong>${imageName}</strong>`;
+        if (taskId) {
+          infoHtml += ` &bull; Task #${taskId}`;
+          if (labelStudioUrl) {
+            infoHtml += ` <a class="task-link" href="${labelStudioUrl}" target="_blank">(open in Label Studio)</a>`;
+          }
+        }
+
+        captureInfo.innerHTML = infoHtml;
+        capturedPhotoCard.classList.remove('hidden');
       }
 
-      // Show result text
+      // Short status message in the action card
       captureResult.classList.remove('hidden');
       captureResult.innerHTML = `
-        <strong style="color:var(--success)">Capture successful!</strong><br>
-        Image: ${data.image_name || 'N/A'}<br>
-        Status: ${data.server2_response?.status || data.status || 'uploaded'}<br>
-        <small>Image is now available in Label Studio for labeling.</small>
+        <strong style="color:var(--success)">Capture successful!</strong>
+        Image uploaded and Label Studio task created. See photo below.
       `;
 
     } catch (e) {
@@ -188,6 +204,7 @@ document.addEventListener('DOMContentLoaded', () => {
     captureBtn.disabled = false;
     captureBtn.textContent = 'Capture Image';
     loadStats();
+    loadLabelingProgress();
   });
 
   // ── Capture & Predict (Inference Mode) ──
