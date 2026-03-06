@@ -148,6 +148,9 @@ services:
       - SERVER2_URL=http://pcb-server2-labelstudio:8002
       - INFERENCE_URL=http://pcb-inference:8003
       - LABELSTUDIO_URL=http://labelstudio:8080
+      - LABELSTUDIO_EXTERNAL_URL=${LABELSTUDIO_EXTERNAL_URL:-http://localhost:8080}
+    volumes:
+      - ./dashboard:/app
     networks:
       - pcb-network
     depends_on:

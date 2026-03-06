@@ -1,34 +1,92 @@
 // PCB Dashboard - Frontend Logic
 
 document.addEventListener('DOMContentLoaded', () => {
-  // ── Input mode state ──
-  let inputMode = 'camera'; // 'camera' or 'upload'
-  let galleryMode = 'unlabeled'; // 'unlabeled' or 'labeled'
+  // ── State ──
+  let cameraSource = 'browser'; // 'browser', 'server', 'test'
+  let galleryMode = 'unlabeled';
+  let webcamStream = null;
 
-  // ── Mode selector ──
-  document.querySelectorAll('.mode-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      inputMode = btn.dataset.mode;
-      updateModeUI();
-    });
+  // ── Camera source selector ──
+  const cameraSelect = document.getElementById('camera-source');
+  const cameraHint = document.getElementById('camera-hint');
+  const webcamContainer = document.getElementById('webcam-container');
+  const webcamVideo = document.getElementById('webcam-video');
+  const webcamStatus = document.getElementById('webcam-status');
+
+  const CAMERA_HINTS = {
+    browser: 'Uses your browser\'s camera directly. No Docker camera passthrough needed.',
+    server: 'Uses the camera connected to Server 1 (Raspberry Pi or USB camera). Set USE_CAMERA=true in .env.',
+    test: 'Generates a synthetic PCB test image. Good for testing the pipeline without a camera.'
+  };
+
+  cameraSelect.addEventListener('change', () => {
+    cameraSource = cameraSelect.value;
+    cameraHint.textContent = CAMERA_HINTS[cameraSource];
+    updateCameraUI();
   });
 
-  function updateModeUI() {
-    const hint = document.getElementById('mode-hint');
-    const cameraActions = document.getElementById('camera-actions');
-    const uploadSeparator = document.getElementById('upload-separator');
-
-    if (inputMode === 'camera') {
-      hint.innerHTML = 'Using camera via Server 1. On MacBook set <code>USE_CAMERA=true</code> in .env.';
-      cameraActions.classList.remove('hidden');
-      uploadSeparator.textContent = 'Or upload an image manually:';
+  function updateCameraUI() {
+    if (cameraSource === 'browser') {
+      webcamContainer.classList.remove('hidden');
+      startWebcam();
     } else {
-      hint.innerHTML = 'Upload images manually. Useful for testing without a camera connected.';
-      cameraActions.classList.add('hidden');
-      uploadSeparator.textContent = 'Upload an image:';
+      webcamContainer.classList.add('hidden');
+      stopWebcam();
     }
+  }
+
+  // ── WebRTC Webcam ──
+  async function startWebcam() {
+    if (webcamStream) return; // already running
+
+    webcamStatus.textContent = 'Starting camera...';
+    webcamStatus.classList.remove('hidden');
+
+    try {
+      webcamStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          facingMode: 'environment' // prefer back camera on mobile
+        }
+      });
+
+      webcamVideo.srcObject = webcamStream;
+      webcamStatus.classList.add('hidden');
+    } catch (err) {
+      webcamStatus.textContent = `Camera error: ${err.message}. Check browser permissions.`;
+      webcamStatus.classList.remove('hidden');
+      console.error('Webcam error:', err);
+    }
+  }
+
+  function stopWebcam() {
+    if (webcamStream) {
+      webcamStream.getTracks().forEach(t => t.stop());
+      webcamStream = null;
+      webcamVideo.srcObject = null;
+    }
+  }
+
+  function captureWebcamFrame() {
+    if (!webcamStream || !webcamVideo.videoWidth) {
+      throw new Error('Webcam not ready. Please allow camera access.');
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = webcamVideo.videoWidth;
+    canvas.height = webcamVideo.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(webcamVideo, 0, 0);
+
+    return new Promise((resolve) => {
+      canvas.toBlob(resolve, 'image/jpeg', 0.95);
+    });
+  }
+
+  // Start webcam on load if browser mode selected
+  if (cameraSource === 'browser') {
+    updateCameraUI();
   }
 
   // ── Tab switching ──
@@ -70,27 +128,58 @@ document.addEventListener('DOMContentLoaded', () => {
   // ── Capture button (Label Mode) ──
   const captureBtn = document.getElementById('btn-capture');
   const captureResult = document.getElementById('capture-result');
+  const capturePreview = document.getElementById('capture-preview');
+  const capturePreviewImg = document.getElementById('capture-preview-img');
 
   captureBtn.addEventListener('click', async () => {
     captureBtn.disabled = true;
     captureBtn.textContent = 'Capturing...';
     captureResult.classList.add('hidden');
+    capturePreview.classList.add('hidden');
 
     try {
-      const r = await fetch('/api/capture', { method: 'POST' });
-      const data = await r.json();
-      captureResult.classList.remove('hidden');
+      let data;
 
-      if (r.ok) {
-        captureResult.innerHTML = `
-          <strong>Capture successful!</strong><br>
-          Image: ${data.image_name || 'N/A'}<br>
-          Status: ${data.server2_response?.status || data.status || 'uploaded'}<br>
-          <small>Image is now available in Label Studio for labeling.</small>
-        `;
+      if (cameraSource === 'browser') {
+        // Capture from browser webcam → upload to storage
+        const blob = await captureWebcamFrame();
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const filename = `capture_${timestamp}.jpg`;
+
+        const formData = new FormData();
+        formData.append('file', blob, filename);
+
+        const r = await fetch('/api/upload-to-storage', { method: 'POST', body: formData });
+        data = await r.json();
+
+        if (!r.ok) {
+          throw new Error(data.detail || 'Upload failed');
+        }
       } else {
-        captureResult.innerHTML = `<strong style="color:var(--danger)">Error:</strong> ${data.detail || JSON.stringify(data)}`;
+        // Use server camera or test image
+        const r = await fetch('/api/capture', { method: 'POST' });
+        data = await r.json();
+
+        if (!r.ok) {
+          throw new Error(data.detail || 'Capture failed');
+        }
       }
+
+      // Show image preview
+      if (data.image_base64) {
+        capturePreviewImg.src = 'data:image/jpeg;base64,' + data.image_base64;
+        capturePreview.classList.remove('hidden');
+      }
+
+      // Show result text
+      captureResult.classList.remove('hidden');
+      captureResult.innerHTML = `
+        <strong style="color:var(--success)">Capture successful!</strong><br>
+        Image: ${data.image_name || 'N/A'}<br>
+        Status: ${data.server2_response?.status || data.status || 'uploaded'}<br>
+        <small>Image is now available in Label Studio for labeling.</small>
+      `;
+
     } catch (e) {
       captureResult.classList.remove('hidden');
       captureResult.innerHTML = `<strong style="color:var(--danger)">Error:</strong> ${e.message}`;
@@ -114,16 +203,31 @@ document.addEventListener('DOMContentLoaded', () => {
     inferenceLoading.classList.remove('hidden');
 
     try {
-      const r = await fetch('/api/capture-and-predict', { method: 'POST' });
-      const data = await r.json();
+      let data;
+
+      if (cameraSource === 'browser') {
+        // Capture from browser webcam → send to inference
+        const blob = await captureWebcamFrame();
+        const formData = new FormData();
+        formData.append('file', blob, 'capture.jpg');
+
+        const r = await fetch('/api/predict', { method: 'POST', body: formData });
+        data = await r.json();
+        data.source = 'browser_webcam';
+
+        if (!r.ok) throw new Error(data.detail || 'Prediction failed');
+      } else {
+        // Use server camera/test image → predict
+        const r = await fetch('/api/capture-and-predict', { method: 'POST' });
+        data = await r.json();
+
+        if (!r.ok) throw new Error(data.detail || 'Capture-and-predict failed');
+      }
+
       inferenceLoading.classList.add('hidden');
       inferenceResult.classList.remove('hidden');
+      renderPredictionResult(data);
 
-      if (r.ok) {
-        renderPredictionResult(data);
-      } else {
-        inferenceResult.innerHTML = `<strong style="color:var(--danger)">Error:</strong> ${data.detail || JSON.stringify(data)}`;
-      }
     } catch (e) {
       inferenceLoading.classList.add('hidden');
       inferenceResult.classList.remove('hidden');
@@ -141,22 +245,46 @@ document.addEventListener('DOMContentLoaded', () => {
     inferenceLoading.classList.remove('hidden');
 
     try {
-      const r = await fetch('/api/capture-label-and-predict', { method: 'POST' });
-      const data = await r.json();
+      let data;
+
+      if (cameraSource === 'browser') {
+        // Capture from browser → upload to storage + predict
+        const blob = await captureWebcamFrame();
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const filename = `capture_${timestamp}.jpg`;
+
+        // Upload to storage for labeling
+        const uploadForm = new FormData();
+        uploadForm.append('file', blob, filename);
+        const upR = await fetch('/api/upload-to-storage', { method: 'POST', body: uploadForm });
+
+        // Also send to inference
+        const predForm = new FormData();
+        predForm.append('file', blob, filename);
+        const predR = await fetch('/api/predict', { method: 'POST', body: predForm });
+        data = await predR.json();
+        data.source = 'browser_webcam';
+        data.also_uploaded_to_labelstudio = upR.ok;
+
+        if (!predR.ok) throw new Error(data.detail || 'Prediction failed');
+      } else {
+        const r = await fetch('/api/capture-label-and-predict', { method: 'POST' });
+        data = await r.json();
+
+        if (!r.ok) throw new Error(data.detail || 'Capture-label-predict failed');
+      }
+
       inferenceLoading.classList.add('hidden');
       inferenceResult.classList.remove('hidden');
+      renderPredictionResult(data);
 
-      if (r.ok) {
-        renderPredictionResult(data);
-        if (data.also_uploaded_to_labelstudio) {
-          const note = document.createElement('p');
-          note.style.cssText = 'color:var(--success); font-size:0.85rem; margin-top:8px;';
-          note.textContent = 'Image also uploaded to Label Studio for labeling.';
-          inferenceResult.appendChild(note);
-        }
-      } else {
-        inferenceResult.innerHTML = `<strong style="color:var(--danger)">Error:</strong> ${data.detail || JSON.stringify(data)}`;
+      if (data.also_uploaded_to_labelstudio) {
+        const note = document.createElement('p');
+        note.style.cssText = 'color:var(--success); font-size:0.85rem; margin-top:8px;';
+        note.textContent = 'Image also uploaded to Label Studio for labeling.';
+        inferenceResult.appendChild(note);
       }
+
     } catch (e) {
       inferenceLoading.classList.add('hidden');
       inferenceResult.classList.remove('hidden');
@@ -174,8 +302,9 @@ document.addEventListener('DOMContentLoaded', () => {
       : data.overall_quality === 'Fail' ? 'quality-fail' : 'quality-review';
 
     const sourceLabels = {
-      camera_capture: '(from camera)',
+      camera_capture: '(from server camera)',
       button_capture: '(from GPIO button)',
+      browser_webcam: '(from browser webcam)',
       upload: '(uploaded)',
     };
     const sourceLabel = sourceLabels[data.source] || `(${data.source || 'unknown'})`;
@@ -461,8 +590,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const card = document.createElement('div');
         card.className = 'image-card';
 
-        // Build the image URL from the stored path
-        // Path is like /data/unlabeled/ab/cd/.../file.jpg or /data/labeled/file.jpg
         const storedPath = img.path || img.image_path || '';
         const relativePath = storedPath.replace(/^\/data\//, '');
         const imageUrl = `/api/images/serve/${relativePath}`;
@@ -583,4 +710,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   loadModelInfo();
+
+  // ── Cleanup on page unload ──
+  window.addEventListener('beforeunload', () => {
+    stopWebcam();
+  });
 });

@@ -12,16 +12,25 @@
     <div id="service-status" class="status-bar">Loading services...</div>
   </header>
 
-  <!-- ── MODE SELECTOR ── -->
-  <div class="card mode-selector">
-    <div class="mode-row">
-      <span class="mode-label">Input mode:</span>
-      <button class="mode-btn active" data-mode="camera">Camera (RPi / Webcam)</button>
-      <button class="mode-btn" data-mode="upload">Upload / Drag &amp; Drop</button>
+  <!-- ── CAMERA SOURCE SELECTOR ── -->
+  <div class="card camera-selector">
+    <div class="camera-row">
+      <span class="camera-label">Camera source:</span>
+      <select id="camera-source" class="camera-select">
+        <option value="browser">Browser Webcam (MacBook / Laptop)</option>
+        <option value="server">Server Camera (RPi / USB via Server 1)</option>
+        <option value="test">Test Image (Generated Sample)</option>
+      </select>
     </div>
-    <p class="mode-hint" id="mode-hint">
-      Using camera via Server 1. On MacBook set <code>USE_CAMERA=true</code> in .env.
+    <p class="camera-hint" id="camera-hint">
+      Uses your browser's camera directly. No Docker camera passthrough needed.
     </p>
+
+    <!-- Webcam preview (shown when browser webcam is selected) -->
+    <div id="webcam-container" class="webcam-container hidden">
+      <video id="webcam-video" autoplay playsinline muted></video>
+      <div id="webcam-status" class="webcam-status">Starting camera...</div>
+    </div>
   </div>
 
   <nav class="tabs">
@@ -35,11 +44,17 @@
   <section id="tab-label" class="tab-content active">
     <div class="card">
       <h2>Capture &amp; Label Workflow</h2>
-      <p>Capture an image from the camera (or sample), upload it to storage, then label it in Label Studio.</p>
+      <p>Capture an image, preview it, then upload to Label Studio for labeling.</p>
 
       <div class="actions">
         <button id="btn-capture" class="btn btn-primary">Capture Image</button>
         <a href="{{ labelstudio_url }}" target="_blank" class="btn btn-secondary">Open Label Studio</a>
+      </div>
+
+      <!-- Captured image preview -->
+      <div id="capture-preview" class="capture-preview hidden">
+        <h3>Captured Image</h3>
+        <img id="capture-preview-img" src="" alt="Captured image">
       </div>
 
       <div id="capture-result" class="result hidden"></div>

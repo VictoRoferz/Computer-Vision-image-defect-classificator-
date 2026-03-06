@@ -66,13 +66,71 @@ async def services_status():
 
 @app.post("/api/capture")
 async def proxy_capture():
-    """Trigger camera capture → upload pipeline."""
+    """
+    Capture image from server1 camera, upload to server2 storage, return image preview.
+    Used for: server camera + test image modes.
+    """
     try:
-        r = requests.post(f"{SERVER1_URL}/api/v1/capture", timeout=30)
-        r.raise_for_status()
-        return r.json()
+        # Step 1: Capture raw image bytes from server1
+        cap_r = requests.post(f"{SERVER1_URL}/api/v1/capture-image", timeout=30)
+        cap_r.raise_for_status()
+
+        image_bytes = cap_r.content
+        filename = cap_r.headers.get("X-Image-Filename", "capture.jpg")
+
+        # Step 2: Upload to server2 for Label Studio
+        files = {"file": (filename, io.BytesIO(image_bytes), "image/jpeg")}
+        up_r = requests.post(f"{SERVER2_URL}/api/v1/upload", files=files, timeout=30)
+
+        result = {
+            "status": "success",
+            "message": "Image captured and uploaded successfully",
+            "image_name": filename,
+            "image_base64": base64.b64encode(image_bytes).decode("utf-8"),
+        }
+
+        if up_r.ok:
+            result["server2_response"] = up_r.json()
+        else:
+            result["server2_response"] = {"error": up_r.text}
+            result["message"] = "Image captured but upload to storage failed"
+
+        return result
+
     except requests.RequestException as e:
         raise HTTPException(status_code=502, detail=f"Camera service error: {e}")
+
+
+@app.post("/api/upload-to-storage")
+async def upload_browser_image(file: UploadFile = File(...)):
+    """
+    Upload a browser-captured image to server2 storage for labeling.
+    Used for: browser webcam capture → Label Studio.
+    Returns upload status + image as base64 for preview.
+    """
+    try:
+        image_bytes = await file.read()
+
+        files = {"file": (file.filename, io.BytesIO(image_bytes), file.content_type or "image/jpeg")}
+        r = requests.post(f"{SERVER2_URL}/api/v1/upload", files=files, timeout=30)
+
+        result = {
+            "status": "success" if r.ok else "error",
+            "image_name": file.filename,
+            "image_base64": base64.b64encode(image_bytes).decode("utf-8"),
+        }
+
+        if r.ok:
+            result["server2_response"] = r.json()
+            result["message"] = "Image uploaded to storage and Label Studio"
+        else:
+            result["server2_response"] = {"error": r.text}
+            result["message"] = "Upload to storage failed"
+
+        return result
+
+    except requests.RequestException as e:
+        raise HTTPException(status_code=502, detail=f"Storage service error: {e}")
 
 
 @app.post("/api/predict")
@@ -85,7 +143,6 @@ async def proxy_predict(file: UploadFile = File(...)):
         r.raise_for_status()
 
         result = r.json()
-        # Include the image as base64 so the frontend can display it with overlays
         result["image_base64"] = base64.b64encode(image_bytes).decode("utf-8")
         return result
     except requests.RequestException as e:
@@ -153,7 +210,7 @@ async def proxy_inference_status():
 @app.post("/api/capture-and-predict")
 async def capture_and_predict():
     """
-    Capture image from camera and run inference.
+    Capture image from server1 camera and run inference.
     Returns prediction results + base64-encoded captured image.
     """
     try:
@@ -172,7 +229,6 @@ async def capture_and_predict():
         result = pred_r.json()
         result["source"] = "camera_capture"
         result["image_name"] = filename
-        # Include image as base64 for frontend display
         result["image_base64"] = base64.b64encode(image_bytes).decode("utf-8")
         return result
 
@@ -187,28 +243,28 @@ async def capture_label_and_predict():
     Returns prediction results + base64-encoded captured image.
     """
     try:
-        # Step 1: Capture and upload to server2 (label flow)
-        cap_r = requests.post(f"{SERVER1_URL}/api/v1/capture", timeout=30)
+        # Step 1: Capture raw image from server1
+        cap_r = requests.post(f"{SERVER1_URL}/api/v1/capture-image", timeout=30)
         cap_r.raise_for_status()
-        capture_data = cap_r.json()
 
-        # Step 2: Also capture a fresh image for inference
-        cap_img_r = requests.post(f"{SERVER1_URL}/api/v1/capture-image", timeout=30)
-        cap_img_r.raise_for_status()
+        image_bytes = cap_r.content
+        filename = cap_r.headers.get("X-Image-Filename", "capture.jpg")
 
-        image_bytes = cap_img_r.content
-        filename = cap_img_r.headers.get("X-Image-Filename", "capture.jpg")
+        # Step 2: Upload to server2 for labeling
+        upload_files = {"file": (filename, io.BytesIO(image_bytes), "image/jpeg")}
+        up_r = requests.post(f"{SERVER2_URL}/api/v1/upload", files=upload_files, timeout=30)
 
         # Step 3: Run inference
-        files = {"file": (filename, io.BytesIO(image_bytes), "image/jpeg")}
-        pred_r = requests.post(f"{INFERENCE_URL}/api/v1/predict", files=files, timeout=60)
+        infer_files = {"file": (filename, io.BytesIO(image_bytes), "image/jpeg")}
+        pred_r = requests.post(f"{INFERENCE_URL}/api/v1/predict", files=infer_files, timeout=60)
         pred_r.raise_for_status()
 
         result = pred_r.json()
         result["source"] = "camera_capture"
-        result["also_uploaded_to_labelstudio"] = True
-        result["capture_info"] = capture_data
-        # Include image as base64 for frontend display
+        result["image_name"] = filename
+        result["also_uploaded_to_labelstudio"] = up_r.ok
+        if up_r.ok:
+            result["capture_info"] = up_r.json()
         result["image_base64"] = base64.b64encode(image_bytes).decode("utf-8")
         return result
 
