@@ -26,6 +26,9 @@ class CameraService:
         self.fallback_path = Path(settings.fallback_image_path)
         self.temp_dir = settings.temp_dir
 
+        # Ensure temp directory exists
+        self.temp_dir.mkdir(parents=True, exist_ok=True)
+
         logger.info(
             f"CameraService initialized: use_camera={self.use_camera}, "
             f"index={self.camera_index}"
@@ -143,7 +146,12 @@ class CameraService:
         """
         Create a minimal test image for development/testing.
         Simulates a PCB board appearance.
+        Tries OpenCV first, falls back to PIL/Pillow if cv2 fails.
         """
+        # Ensure parent directory exists
+        self.fallback_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Try OpenCV first
         try:
             import numpy as np
 
@@ -165,10 +173,39 @@ class CameraService:
             cv2.putText(image, text, (50, height - 50), font, 1.5, (255, 255, 255), 2, cv2.LINE_AA)
 
             cv2.imwrite(str(self.fallback_path), image)
-            logger.info(f"Created test image at {self.fallback_path}")
+            logger.info(f"Created test image at {self.fallback_path} (OpenCV)")
+            return
 
         except Exception as e:
-            logger.error(f"Failed to create test image: {e}", exc_info=True)
+            logger.warning(f"OpenCV test image creation failed: {e}, trying PIL fallback")
+
+        # Fallback to PIL/Pillow
+        try:
+            from PIL import Image, ImageDraw, ImageFont
+
+            width, height = 1920, 1080
+            image = Image.new('RGB', (width, height), color=(20, 40, 20))
+            draw = ImageDraw.Draw(image)
+
+            # Add rectangles to simulate components
+            draw.rectangle([(200, 200), (400, 350)], fill=(60, 60, 60))
+            draw.rectangle([(500, 300), (800, 450)], fill=(50, 50, 80))
+            draw.rectangle([(1000, 400), (1200, 550)], fill=(40, 70, 40))
+            draw.rectangle([(1400, 200), (1700, 400)], fill=(70, 50, 50))
+
+            # Add text
+            text = f"PCB TEST IMAGE - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            try:
+                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 32)
+            except Exception:
+                font = ImageFont.load_default()
+            draw.text((50, height - 70), text, fill=(255, 255, 255), font=font)
+
+            image.save(str(self.fallback_path), 'JPEG', quality=95)
+            logger.info(f"Created test image at {self.fallback_path} (PIL)")
+
+        except Exception as e:
+            logger.error(f"Failed to create test image with both OpenCV and PIL: {e}", exc_info=True)
 
     def capture_bytes(self) -> Optional[bytes]:
         """

@@ -79,9 +79,6 @@ async def proxy_capture():
         filename = cap_r.headers.get("X-Image-Filename", "capture.jpg")
 
         # Step 2: Upload to server2 for Label Studio
-        files = {"file": (filename, io.BytesIO(image_bytes), "image/jpeg")}
-        up_r = requests.post(f"{SERVER2_URL}/api/v1/upload", files=files, timeout=30)
-
         result = {
             "status": "success",
             "message": "Image captured and uploaded successfully",
@@ -89,11 +86,20 @@ async def proxy_capture():
             "image_base64": base64.b64encode(image_bytes).decode("utf-8"),
         }
 
-        if up_r.ok:
-            result["server2_response"] = up_r.json()
-        else:
-            result["server2_response"] = {"error": up_r.text}
-            result["message"] = "Image captured but upload to storage failed"
+        try:
+            files = {"file": (filename, io.BytesIO(image_bytes), "image/jpeg")}
+            up_r = requests.post(f"{SERVER2_URL}/api/v1/upload", files=files, timeout=30)
+
+            if up_r.ok:
+                result["server2_response"] = up_r.json()
+            else:
+                result["server2_response"] = {"error": up_r.text}
+                result["status"] = "partial"
+                result["message"] = "Image captured but upload to storage failed"
+        except requests.RequestException as e:
+            result["server2_response"] = {"error": str(e)}
+            result["status"] = "partial"
+            result["message"] = f"Image captured but storage service unreachable: {e}"
 
         return result
 
@@ -107,30 +113,37 @@ async def upload_browser_image(file: UploadFile = File(...)):
     Upload a browser-captured image to server2 storage for labeling.
     Used for: browser webcam capture → Label Studio.
     Returns upload status + image as base64 for preview.
+    Always returns image_base64 so the captured photo card can display.
     """
     try:
         image_bytes = await file.read()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to read uploaded file: {e}")
 
+    # Always include image_base64 so the frontend can show the captured photo
+    result = {
+        "image_name": file.filename,
+        "image_base64": base64.b64encode(image_bytes).decode("utf-8"),
+    }
+
+    try:
         files = {"file": (file.filename, io.BytesIO(image_bytes), file.content_type or "image/jpeg")}
         r = requests.post(f"{SERVER2_URL}/api/v1/upload", files=files, timeout=30)
 
-        result = {
-            "status": "success" if r.ok else "error",
-            "image_name": file.filename,
-            "image_base64": base64.b64encode(image_bytes).decode("utf-8"),
-        }
-
         if r.ok:
+            result["status"] = "success"
             result["server2_response"] = r.json()
             result["message"] = "Image uploaded to storage and Label Studio"
         else:
+            result["status"] = "partial"
             result["server2_response"] = {"error": r.text}
-            result["message"] = "Upload to storage failed"
-
-        return result
-
+            result["message"] = "Image captured but upload to storage failed"
     except requests.RequestException as e:
-        raise HTTPException(status_code=502, detail=f"Storage service error: {e}")
+        result["status"] = "partial"
+        result["server2_response"] = {"error": str(e)}
+        result["message"] = f"Image captured but storage service unreachable: {e}"
+
+    return result
 
 
 @app.post("/api/predict")

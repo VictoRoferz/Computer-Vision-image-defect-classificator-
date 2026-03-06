@@ -42,6 +42,21 @@ document.addEventListener('DOMContentLoaded', () => {
     webcamStatus.textContent = 'Starting camera...';
     webcamStatus.classList.remove('hidden');
 
+    // Check if getUserMedia is available (requires HTTPS or localhost)
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      const isSecure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+      if (!isSecure) {
+        webcamStatus.textContent = 'Browser webcam requires HTTPS or localhost. ' +
+          'You are accessing via ' + location.hostname + '. ' +
+          'Use http://localhost:3000 instead, or select "Test Image" mode.';
+      } else {
+        webcamStatus.textContent = 'Browser does not support camera access (getUserMedia not available).';
+      }
+      webcamStatus.classList.remove('hidden');
+      console.error('getUserMedia not available');
+      return;
+    }
+
     try {
       webcamStream = await navigator.mediaDevices.getUserMedia({
         video: {
@@ -54,7 +69,15 @@ document.addEventListener('DOMContentLoaded', () => {
       webcamVideo.srcObject = webcamStream;
       webcamStatus.classList.add('hidden');
     } catch (err) {
-      webcamStatus.textContent = `Camera error: ${err.message}. Check browser permissions.`;
+      let msg = `Camera error: ${err.message}.`;
+      if (err.name === 'NotAllowedError') {
+        msg = 'Camera access denied. Please allow camera permission in your browser and reload.';
+      } else if (err.name === 'NotFoundError') {
+        msg = 'No camera found. Connect a camera or select "Test Image" mode.';
+      } else if (err.name === 'NotReadableError') {
+        msg = 'Camera is in use by another application. Close it and reload.';
+      }
+      webcamStatus.textContent = msg;
       webcamStatus.classList.remove('hidden');
       console.error('Webcam error:', err);
     }
@@ -174,14 +197,26 @@ document.addEventListener('DOMContentLoaded', () => {
         const s2 = data.server2_response || {};
         const taskId = s2.task_id || data.task_id;
         const imageName = data.image_name || s2.filename || 'N/A';
-        const labelStudioUrl = document.querySelector('a[href*="labelstudio"], a.btn-secondary')?.href || '';
+        const labelStudioUrl = window.LABELSTUDIO_URL || '';
 
-        let infoHtml = `<strong style="color:var(--success)">Sent to Label Studio</strong> &mdash; `;
-        infoHtml += `Image: <strong>${imageName}</strong>`;
+        let infoHtml = '';
         if (taskId) {
+          infoHtml += `<strong style="color:var(--success)">Sent to Label Studio</strong> &mdash; `;
+          infoHtml += `Image: <strong>${imageName}</strong>`;
           infoHtml += ` &bull; Task #${taskId}`;
           if (labelStudioUrl) {
-            infoHtml += ` <a class="task-link" href="${labelStudioUrl}" target="_blank">(open in Label Studio)</a>`;
+            infoHtml += ` <a class="task-link" href="${labelStudioUrl}/tasks/${taskId}" target="_blank">(open in Label Studio)</a>`;
+          }
+        } else {
+          infoHtml += `<strong style="color:var(--warning)">Image captured</strong> &mdash; `;
+          infoHtml += `Image: <strong>${imageName}</strong>`;
+          if (s2.error) {
+            infoHtml += `<br><small style="color:var(--muted)">Label Studio task not created: ${s2.error}</small>`;
+          } else {
+            infoHtml += `<br><small style="color:var(--muted)">Label Studio task not created (check LABELSTUDIO_API_KEY in .env)</small>`;
+          }
+          if (labelStudioUrl) {
+            infoHtml += ` <a class="task-link" href="${labelStudioUrl}" target="_blank">(open Label Studio)</a>`;
           }
         }
 
@@ -191,10 +226,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Short status message in the action card
       captureResult.classList.remove('hidden');
-      captureResult.innerHTML = `
-        <strong style="color:var(--success)">Capture successful!</strong>
-        Image uploaded and Label Studio task created. See photo below.
-      `;
+      const isPartial = data.status === 'partial';
+      captureResult.innerHTML = isPartial
+        ? `<strong style="color:var(--warning)">Capture completed with warnings.</strong> ${data.message || 'See photo below.'}`
+        : `<strong style="color:var(--success)">Capture successful!</strong> ${data.message || 'Image uploaded and Label Studio task created. See photo below.'}`;
 
     } catch (e) {
       captureResult.classList.remove('hidden');

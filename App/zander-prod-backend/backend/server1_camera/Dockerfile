@@ -20,7 +20,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-RUN mkdir -p /tmp/camera_captures
+RUN mkdir -p /tmp/camera_captures /app/fallback
 
 ENV PYTHONUNBUFFERED=1
 ENV USE_CAMERA=false
