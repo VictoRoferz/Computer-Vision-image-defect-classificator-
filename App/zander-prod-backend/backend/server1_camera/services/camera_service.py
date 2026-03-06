@@ -114,6 +114,14 @@ class CameraService:
                 cap.release()
                 logger.debug("Camera released")
 
+    def capture_test(self) -> Optional[Path]:
+        """
+        Force capture using fallback/test image, regardless of USE_CAMERA setting.
+        Used when dashboard user selects 'Test Image' mode.
+        """
+        logger.info("Test capture requested, using fallback image")
+        return self._use_fallback()
+
     def _use_fallback(self) -> Path:
         """
         Use fallback image for testing without camera.

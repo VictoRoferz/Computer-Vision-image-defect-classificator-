@@ -180,8 +180,12 @@ document.addEventListener('DOMContentLoaded', () => {
           throw new Error(data.detail || 'Upload failed');
         }
       } else {
-        // Use server camera or test image
-        const r = await fetch('/api/capture', { method: 'POST' });
+        // Use server camera or test image — pass mode so server1 knows which to use
+        const r = await fetch('/api/capture', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: cameraSource })  // 'server' or 'test'
+        });
         data = await r.json();
 
         if (!r.ok) {
@@ -270,7 +274,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!r.ok) throw new Error(data.detail || 'Prediction failed');
       } else {
         // Use server camera/test image → predict
-        const r = await fetch('/api/capture-and-predict', { method: 'POST' });
+        const r = await fetch('/api/capture-and-predict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: cameraSource })
+        });
         data = await r.json();
 
         if (!r.ok) throw new Error(data.detail || 'Capture-and-predict failed');
@@ -320,7 +328,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!predR.ok) throw new Error(data.detail || 'Prediction failed');
       } else {
-        const r = await fetch('/api/capture-label-and-predict', { method: 'POST' });
+        const r = await fetch('/api/capture-label-and-predict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: cameraSource })
+        });
         data = await r.json();
 
         if (!r.ok) throw new Error(data.detail || 'Capture-label-predict failed');

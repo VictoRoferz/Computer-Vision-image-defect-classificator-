@@ -169,16 +169,22 @@ async def test_camera() -> Dict[str, Any]:
 
 
 @router.post("/capture-image")
-async def capture_image_only() -> Response:
+async def capture_image_only(mode: str = "server") -> Response:
     """
     Capture image from camera and return the raw image bytes.
     Used by the dashboard for the capture-and-predict inference flow.
     Does NOT upload to Server 2.
+
+    Args:
+        mode: 'server' to use configured camera, 'test' to force test/fallback image.
     """
-    logger.info("Capture-image request (for inference)")
+    logger.info(f"Capture-image request (mode={mode})")
 
     try:
-        image_path = camera_service.capture()
+        if mode == "test":
+            image_path = camera_service.capture_test()
+        else:
+            image_path = camera_service.capture()
 
         if not image_path:
             raise HTTPException(status_code=500, detail="Failed to capture image")

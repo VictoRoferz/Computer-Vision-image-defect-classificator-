@@ -65,14 +65,27 @@ async def services_status():
 
 
 @app.post("/api/capture")
-async def proxy_capture():
+async def proxy_capture(request: Request):
     """
     Capture image from server1 camera, upload to server2 storage, return image preview.
     Used for: server camera + test image modes.
+    Accepts JSON body with optional 'mode' field: 'server' or 'test'.
     """
     try:
+        # Read mode from request body (sent by frontend)
+        mode = "server"
+        try:
+            body = await request.json()
+            mode = body.get("mode", "server")
+        except Exception:
+            pass
+
         # Step 1: Capture raw image bytes from server1
-        cap_r = requests.post(f"{SERVER1_URL}/api/v1/capture-image", timeout=30)
+        cap_r = requests.post(
+            f"{SERVER1_URL}/api/v1/capture-image",
+            params={"mode": mode},
+            timeout=30,
+        )
         cap_r.raise_for_status()
 
         image_bytes = cap_r.content
@@ -221,14 +234,25 @@ async def proxy_inference_status():
 
 
 @app.post("/api/capture-and-predict")
-async def capture_and_predict():
+async def capture_and_predict(request: Request):
     """
     Capture image from server1 camera and run inference.
     Returns prediction results + base64-encoded captured image.
     """
     try:
+        mode = "server"
+        try:
+            body = await request.json()
+            mode = body.get("mode", "server")
+        except Exception:
+            pass
+
         # Step 1: Capture image from camera service
-        cap_r = requests.post(f"{SERVER1_URL}/api/v1/capture-image", timeout=30)
+        cap_r = requests.post(
+            f"{SERVER1_URL}/api/v1/capture-image",
+            params={"mode": mode},
+            timeout=30,
+        )
         cap_r.raise_for_status()
 
         image_bytes = cap_r.content
@@ -250,14 +274,25 @@ async def capture_and_predict():
 
 
 @app.post("/api/capture-label-and-predict")
-async def capture_label_and_predict():
+async def capture_label_and_predict(request: Request):
     """
     Full flow: capture image → upload to storage (for labeling) → run inference.
     Returns prediction results + base64-encoded captured image.
     """
     try:
+        mode = "server"
+        try:
+            body = await request.json()
+            mode = body.get("mode", "server")
+        except Exception:
+            pass
+
         # Step 1: Capture raw image from server1
-        cap_r = requests.post(f"{SERVER1_URL}/api/v1/capture-image", timeout=30)
+        cap_r = requests.post(
+            f"{SERVER1_URL}/api/v1/capture-image",
+            params={"mode": mode},
+            timeout=30,
+        )
         cap_r.raise_for_status()
 
         image_bytes = cap_r.content
