@@ -39,9 +39,13 @@ class Settings(BaseSettings):
     @field_validator('labelstudio_project_id', mode='before')
     @classmethod
     def empty_str_to_none(cls, v):
-        """Convert empty strings to None for optional integer fields"""
-        if v == '' or v is None:
+        """Convert empty strings or non-numeric strings to None for optional integer fields"""
+        if v is None or v == '':
             return None
+        if isinstance(v, str):
+            v = v.strip()
+            if not v or not v.isdigit():
+                return None
         return v
 
     # Label Studio project configuration
